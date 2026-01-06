@@ -11,9 +11,10 @@ import CardDownloadprogress from "./components/CardDownloadprogress";
 
 
 function App() {
-  const [open, setOpen] = useState(true);
+  const [open, setOpen] = useState(false);
   const [link, setLink] = useState('');
   const [previews, setPreviews] = useState<Array<{id:string,title:string,thumbnail:string}>>([]);
+  const [setJobId, JobId] = useState("");
 
   const close = () => {
     getCurrentWindow().close();
@@ -22,27 +23,26 @@ function App() {
     getCurrentWindow().minimize();
   };
 
-  const handleSendLink = () => {
-    // mantém a função que dispara o download no backend
-    axios.post('http://localhost:8000/downloadtask', { url: link })
-    .then(response => {
+  const handleSendLink = async (): Promise<string | null> => {
+    try {
+      const response = await axios.post('http://localhost:8000/downloadtask', { url: link });
       console.log('Download iniciado:', response.data);
-    })
-    .catch(error => {
+      return response.data.job_id || null;
+    } catch (error) {
       console.log("error", error)
-    });    
+      return null;
+    }
   }
 
-  const handlePreviwDownload = () => {
-    // chama o endpoint de preview e monta um card simples (sem barra de progresso)
-    axios.post('http://localhost:3000/getInfoVideo', { url: link})
-    .then(res => {
+  const handlePreviwDownload = async (jobId: string | null) => {
+    try {
+      const res = await axios.post('http://localhost:3000/getInfoVideo', { url: link });
       console.log('Preview info:', res.data);
-      const id = String(Date.now());
-      setPreviews(prev => [{ id, title: res.data.title || 'Sem título', thumbnail: res.data.thunbnail || res.data.thumbnail || '' }, ...prev]);
-    }).catch(error => {
+      const idToUse = jobId || crypto.randomUUID();
+      setPreviews(prev => [{ id: idToUse, title: res.data.title || 'Sem título', thumbnail: res.data.thunbnail || res.data.thumbnail || '' }, ...prev]);
+    } catch (error) {
       console.log("error no preview", error)
-    })
+    }
   }
 
   return (
@@ -56,7 +56,7 @@ function App() {
         <div className="search-bar-container">
           <label htmlFor="search-bar-url">Busca: </label>
           <input type="search" className="search-bar" name="search-bar-url" placeholder="Buscar o video" onChange={(e) => setLink(e.target.value)} />
-          <button className="download-btn" onClick={() => { handleSendLink(); handlePreviwDownload(); }}><IoMdDownload /></button>
+          <button className="download-btn" onClick={async () => { const jobId = await handleSendLink(); await handlePreviwDownload(jobId); }}><IoMdDownload /></button>
         </div>
         <div className="buttons-config">
           <button className="updatepage-btn"><GrUpdate /></button>
@@ -85,7 +85,7 @@ function App() {
           }}
         >
           {previews.map(p => (
-            <CardDownloadprogress key={p.id} id={p.id} title={p.title} thumbnail={p.thumbnail} onClose={(id)=> setPreviews(prev => prev.filter(x => x.id !== id))} />
+            <CardDownloadprogress key={p.id} job_id={p.id} title={p.title} thumbnail={p.thumbnail} onClose={(id)=> setPreviews(prev => prev.filter(x => x.id !== id))} />
           ))}
         </div>
         <button
