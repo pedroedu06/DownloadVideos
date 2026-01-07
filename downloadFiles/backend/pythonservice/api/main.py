@@ -5,8 +5,7 @@ from api.redisClient import redisClient
 from api.schemas import DownloadRequest, DownloadStatus
 
 
-# ProgressManager: classe simples que encapsula a leitura do progresso do Redis.
-# Isso facilita testes e futuras adaptações (por exemplo, cache local, agregações).
+# aqui encapsula os valores de progresso do donwload do redis, assim facilita reutilizar em outros lugares
 class ProgressManager:
     def __init__(self, redis_client):
         self._r = redis_client
@@ -23,6 +22,7 @@ progress_manager = ProgressManager(redisClient)
 
 app = FastAPI()
 
+# CORS
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -31,6 +31,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+#Aqui e o coracao do projeto (o seu intuito.)
 @app.post("/downloadtask")
 def create_download(data: DownloadRequest):
     job_id = str(uuid4())
@@ -51,6 +52,7 @@ def create_download(data: DownloadRequest):
 
     return {"job_id": job_id}
 
+#aqui ele retorna status, progresso do job_id do worker
 @app.get("/downloadStatus/{job_id}", response_model=DownloadStatus)
 def get_status(job_id: str):
     status = redisClient.get(f"download:{job_id}:status")
@@ -62,14 +64,9 @@ def get_status(job_id: str):
         "progress": progress,
     }
 
-
+# aqui ele cancela o donwload e retorna o status de 'cancelled'
 @app.post("/downloadCancel/{job_id}")
 def cancel_download(job_id: str):
-    """Marca um job como cancelado para que workers respeitem essa sinalização.
-
-    O endpoint define uma chave de cancelamento em Redis e atualiza o status
-    para `cancelled`. O worker verifica essa chave e aborta o processamento.
-    """
     cancel_key = f"download:{job_id}:cancel"
     redisClient.set(cancel_key, "1")
     redisClient.set(f"download:{job_id}:status", "cancelled")

@@ -1,5 +1,7 @@
 import type { VideoInfo } from "./types";
 
+
+//aqui ele junta os pesos das views, likes e recentes (videos recentes) e transforma num recomendador.
 export function calculateScore(video: VideoInfo): number {
     const viewsWeight = 0.6;
     const likesWeight = 0.4;

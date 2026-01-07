@@ -1,3 +1,5 @@
+
+// aqui ele so extrai a id do video. (ex: UrLH86BXQ0E)
 export function extractVideoID(url: string): string {
 const regex =
   /^(?:https?:\/\/)?(?:www\.)?(?:youtube\.com\/(?:watch\?v=|shorts\/)|youtu\.be\/)([\w-]{11})/;

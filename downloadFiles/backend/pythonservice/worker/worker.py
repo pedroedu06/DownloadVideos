@@ -15,18 +15,18 @@ from yt_dlp import YoutubeDL
 REDIS_CLIENT = os.getenv('REDIS_HOST', 'localhost')
 r = redis.Redis(host=REDIS_CLIENT, port=6379, decode_responses=True)
 
-# Diretório padrão de download 
+# diretório padrao de download 
 DOWNLOAD_DIR = Path(os.getenv('DOWNLOAD_PATH', '/downloads'))
 
-# Worker configuration
+# Configuracoes de worker, como maximo de retrys, tempo de Lock na fila e segundos de espera para cada tentativa
 MAX_RETRIES = 3
 LOCK_TTL = 60 * 60  # 1 hora
-RETRY_BACKOFF = 5  # segundos entre tentativas (poderia ser exponencial)
+RETRY_BACKOFF = 5  # segundos entre tentativas
 
-# Worker identity used for lock ownership
+# tipo de indentidade de caracter para o worker.
 WORKER_ID = str(uuid.uuid4())
 
-# Setup logging: logs estruturados em JSON para facilitar parsing
+# logs estruturados em JSON para facilitar parsing
 logger = logging.getLogger("download_worker")
 handler = logging.StreamHandler()
 formatter = logging.Formatter("%(message)s")
@@ -40,12 +40,12 @@ def _log_structured(event: str, extra: dict):
     logger.info(json.dumps(payload, ensure_ascii=False))
 
 
+# tenta colocar o lock em NX caso precise.
 def acquire_lock(job_id: str) -> bool:
     lock_key = f"download:{job_id}:lock"
-    # tentativa de setar lock com NX (apenas se não existir)
     return r.set(lock_key, WORKER_ID, nx=True, ex=LOCK_TTL)
 
-
+#aqui ele coloca o lock em cada worker para nao ter o mesmo worker funcionando varias vezes
 def release_lock(job_id: str) -> None:
     lock_key = f"download:{job_id}:lock"
     try:
@@ -56,8 +56,8 @@ def release_lock(job_id: str) -> None:
         pass
 
 
+# aqui funciona o encerramento do worker.
 shutdown_requested = False
-
 
 def _signal_handler(signum, frame):
     global shutdown_requested
@@ -75,7 +75,6 @@ def process_job(job_id: str, url: Optional[str]):
     Implementa estados claros, retries e DLQ. Usa lock distribuído para evitar
     processamento concorrente do mesmo job por múltiplos workers.
     """
-
     if not url:
         r.set(f"download:{job_id}:status", "error")
         r.set(f"download:{job_id}:error", "url nao encontrada")
@@ -89,11 +88,11 @@ def process_job(job_id: str, url: Optional[str]):
         _log_structured("job_cancelled_pre", {"job_id": job_id})
         return
 
-    # tenta adquirir lock; se não conseguir, outro worker já está processando
+    # tenta adquirir lock, se não conseguir, outro worker já está processando
     locked = acquire_lock(job_id)
     if not locked:
         _log_structured("lock_skip", {"job_id": job_id})
-        # re-enfileira para tentar depois (curto retorno) ou simplesmente retorna
+        # re-enfileira para tentar depois curto retorno ou simplesmente retorna
         return
 
     # marca que estamos processando
@@ -126,6 +125,7 @@ def process_job(job_id: str, url: Optional[str]):
     # Ler o formato desejado salvo no Redis (mp4, mp3, webm)
     desired_format = (r.get(f"download:{job_id}:format") or "mp4").lower()
 
+    #aqui sao os formatos que o yt-dlp pode processar 
     audio_formats = {"mp3", "wav", "aac", "m4a", "opus", "flac"}
 
     # opções base comuns
@@ -200,7 +200,7 @@ def process_job(job_id: str, url: Optional[str]):
         # garantir liberação do lock
         release_lock(job_id)
 
-
+#aqui encerra o worker, caso requisitado pelo dev.
 def _main_loop():
     _log_structured("worker_start", {"worker_id": WORKER_ID})
     while not shutdown_requested:

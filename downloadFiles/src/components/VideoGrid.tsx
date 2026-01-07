@@ -11,11 +11,11 @@ type Video = {
     views: number;
 };
 
-
+// aqui ele gera os componente, com base no componente pai.
 const VideoGrid: React.FC = () => {
 
 const [video, setVideos] = useState<Video[]>([]);
-
+//pega os dados da api do yt
     useEffect(() => {
         fetch('http://localhost:3000/feed')
             .then(res => res.json())

@@ -7,6 +7,8 @@ if (!API_KEY) {
     throw new Error("api nao encontrada");
 } 
 
+//aqui ele pega as infos basicas do video, titulo e thum e envia para criar o componente de status de download do front!
+
 export async function getInfosVideo(Videoid: string) {
     const { data } = await axios.get(`${API_URL}/videos`, {
         params: {

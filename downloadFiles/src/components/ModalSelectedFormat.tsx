@@ -8,7 +8,7 @@ type ModalProps = {
     onConfirm: (format: string) => void;
 }
 
-
+//modal de selecao de formato de donwload.
 const ModalSelectedFormat: React.FC<ModalProps> = ({isOpen, onClose, onConfirm}) => {
     const [format, setFormat] = useState('mp4');
 

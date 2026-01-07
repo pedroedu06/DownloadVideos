@@ -15,6 +15,7 @@ function App() {
   };
 
   return (
+    //aqui e a barra de fechar e minimizar o app, aqui e global!
     <div className="mainContainer">
       <section className="titlebar">
         <button className="close-bar" onClick={close}>X</button>
@@ -22,7 +23,7 @@ function App() {
       </section>
 
 
-
+    {/*aqui estao as rotas do app, usando o react-routes*/}
       <Routes>
         <Route path="/*" element={<Home />} />
         <Route path="/settings" element={<Settings />} />

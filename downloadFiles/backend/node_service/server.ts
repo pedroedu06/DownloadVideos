@@ -5,7 +5,7 @@ import { recommendVideos } from './configrecomendedvideos';
 import { extractVideoID } from './extractIdVideo';
 import { getInfosVideo } from './getVideo';
 
-
+//serve express para a api do youtube, decidir separar para nao ficar baguncado.
 const app = express();
 
 app.use(cors());

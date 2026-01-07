@@ -14,6 +14,7 @@ const CardDownloadprogress: React.FC<Props> = ({ job_id, title, thumbnail, onClo
     const [progress, setProgress] = useState<number>(0);
     const [status, setStatus] = useState<string>("queued");
 
+    //retorna os status e progresso do download
     const fetchDownloadStatus = async (job_id: string) => {
         try {
             const res = await axios.get(
@@ -29,7 +30,7 @@ const CardDownloadprogress: React.FC<Props> = ({ job_id, title, thumbnail, onClo
             throw err;
         }
     };
-
+    //tranforma em frontend esses status. 
     useEffect(() => {
         const interval = setInterval(async () => {
             try {

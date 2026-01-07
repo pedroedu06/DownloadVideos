@@ -9,7 +9,7 @@ type Props = {
   likes: number;
   views: number;
 };
-
+//aqui e o componente pai, dos componentes de recomendados.
 const CardVideo: React.FC<Props> = ({ thumbnail, title, likes, views }) => {
   return (
     <div className="cv-card">

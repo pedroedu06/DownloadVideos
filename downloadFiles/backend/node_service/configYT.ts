@@ -9,6 +9,7 @@ if (!apikey && !baseURL) {
     throw new Error("dos dados estao invalidos");
 }
 
+// busca dados da api do youtube. 
 export async function getVideos(): Promise<VideoInfo[]> {
     try {
         const res = await axios.get(`${baseURL}/videos`, {

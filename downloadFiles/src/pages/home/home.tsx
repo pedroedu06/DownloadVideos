@@ -11,34 +11,38 @@ import ModalSelectedFormat from "../../components/ModalSelectedFormat";
 
 
 const home: React.FC = () => {
-    const reload = () => {
+  //reload na pagina, tipo um f5
+  const reload = () => {
     window.location.reload();
   }
 
 
-    const [open, setOpen] = useState(false);
-      const [link, setLink] = useState('');
-      const [previews, setPreviews] = useState<Array<{id:string,title:string,thumbnail:string}>>([]);
-      const [modalOpen, setModalOpen] = useState(false);
-      const [currentPreview, setCurrentPreview] = useState<{title:string,thumbnail:string} | null>(null);
+  const [open, setOpen] = useState(false);
+  const [link, setLink] = useState('');
+  const [previews, setPreviews] = useState<Array<{ id: string, title: string, thumbnail: string }>>([]);
+  const [modalOpen, setModalOpen] = useState(false);
+  const [currentPreview, setCurrentPreview] = useState<{ title: string, thumbnail: string } | null>(null);
 
-      const handleConfirmDownload = async (format: string) => {
+
+  // aqui confirma o seu donwload e envia para o worker
+  const handleConfirmDownload = async (format: string) => {
     setModalOpen(false);
     try {
       const response = await axios.post('http://localhost:8000/downloadtask', { url: link, format });
       console.log('Download iniciado:', response.data);
       const jobId = response.data.job_id || response.data.jobId || crypto.randomUUID();
 
-      setPreviews(prev => [{id: jobId, title: currentPreview?.title || 'unknown', thumbnail: currentPreview?.thumbnail || 'unknown'}, ...prev]);
+      setPreviews(prev => [{ id: jobId, title: currentPreview?.title || 'unknown', thumbnail: currentPreview?.thumbnail || 'unknown' }, ...prev]);
       setOpen(true);
       setCurrentPreview(null);
-      
+
     } catch (error) {
       console.log("erro ao iniciar o donwload", error)
       return null;
     }
   }
 
+  //aqui ele encontra seu video e abre o modal de escolha de formato de donwload
   const handlePreviewDownload = async () => {
     if (!link) return;
     try {
@@ -53,27 +57,27 @@ const home: React.FC = () => {
     }
   }
 
-    return (
-        <div className="mainContainer">
-            <section className="searchbar-configbtns">
-                    <div className="search-bar-container">
-                      <label htmlFor="search-bar-url">Busca: </label>
-                      <input type="search" className="search-bar" name="search-bar-url" placeholder="Buscar o video" onChange={(e) => setLink(e.target.value)} />
-                      <button className="download-btn" onClick={handlePreviewDownload}><IoMdDownload /></button>
-                    </div>
-                    <div className="buttons-config">
-                      <button className="updatepage-btn" onClick={reload}><GrUpdate /></button>
-                      <button className="settings-btn"><CiSettings /></button>
-                    </div>
-                  </section>
-            
-            <section className="modalFormatSelect">
+  return (
+    <div className="mainContainer">
+      <section className="searchbar-configbtns">
+        <div className="search-bar-container">
+          <label htmlFor="search-bar-url">Busca: </label>
+          <input type="search" className="search-bar" name="search-bar-url" placeholder="Buscar o video" onChange={(e) => setLink(e.target.value)} />
+          <button className="download-btn" onClick={handlePreviewDownload}><IoMdDownload /></button>
+        </div>
+        <div className="buttons-config">
+          <button className="updatepage-btn" onClick={reload}><GrUpdate /></button>
+          <button className="settings-btn"><CiSettings /></button>
+        </div>
+      </section>
+
+      <section className="modalFormatSelect">
         <ModalSelectedFormat
           isOpen={modalOpen}
           onClose={() => { setModalOpen(false); setCurrentPreview(null); }}
           onConfirm={handleConfirmDownload}
         />
-        
+
       </section>
 
       <section className="YT-Feed">
@@ -97,7 +101,7 @@ const home: React.FC = () => {
           }}
         >
           {previews.map(p => (
-            <CardDownloadprogress key={p.id} job_id={p.id} title={p.title} thumbnail={p.thumbnail} onClose={(id)=> setPreviews(prev => prev.filter(x => x.id !== id))} />
+            <CardDownloadprogress key={p.id} job_id={p.id} title={p.title} thumbnail={p.thumbnail} onClose={(id) => setPreviews(prev => prev.filter(x => x.id !== id))} />
           ))}
         </div>
         <button
@@ -135,7 +139,7 @@ const home: React.FC = () => {
         </button>
       </div>
     </div>
-    )
+  )
 }
 
 export default home;
