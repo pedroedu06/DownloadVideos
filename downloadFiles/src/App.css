@@ -1,3 +1,4 @@
+/* Regras globais e de layout compartilhadas pela aplicação */
 #root {
   margin: 0;
   padding: 0;
@@ -37,6 +38,7 @@ html, body, #root, .mainContainer {
   position: relative;
 }
 
+/* Mantém a titlebar aqui (usada em App.tsx) */
 .titlebar {
   height: 37px;
   width: 100%;
@@ -78,164 +80,4 @@ html, body, #root, .mainContainer {
 
 .minimize-bar:hover {
   background-color: rgba(56, 58, 75, 0.918);
-}
-
-.searchbar-configbtns {
-  display: flex;
-  height: 80px;
-  border-bottom: 1px solid rgb(56, 58, 75);
-  margin-top: 4px;
-}
-
-.search-bar {
-  border: none;
-  padding: 5px;
-  width: 400px;
-  height: 32px;
-  
-  margin-right: 0;
-  border-radius: 0;
-}
-
-.search-bar:focus {
-  outline: none;
-  outline-color: black;
-}
-
-.search-bar-container label {
-  margin-right: 10px;
-  font-size: 15px;
-}
-
-.search-bar-container {
-  margin-left: 120px;
-  display: flex;
-  align-items: center;
-}
-
-.download-btn {
-  border: none;
-  background: #fff;
-  height: 32px;
-  width: 38px;
-  font-size: 20px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  margin-left: 0;
-  border-radius: 0 4px 4px 0;
-  cursor: pointer;
-  border-left: 1px solid #ccc;
-  padding: 0;
-}
-
-.download-btn img {
-  width: 18px;
-  height: 18px;
-}
-
-.buttons-config {
-  margin-left: auto;
-  display: flex;
-  align-items: center;
-}
-
-.settings-btn {
-  align-items: center;
-  justify-content: center;
-  display: flex;
-  height: 32px;
-  width: 38px;
-  font-size: 22px;
-  color: rgb(56, 58, 75);
-  background-color: #fff;
-  cursor: pointer;
-  margin-right: 30px;
-}
-
-.updatepage-btn {
-  align-items: center;
-  justify-content: center;
-  display: flex;
-  height: 32px;
-  width: 38px;
-  font-size: 19px;
-  color: rgb(56, 58, 75);
-  background-color: #fff;
-  cursor: pointer;
-  margin-right: 10px;
-}
-
-.sidebar-animated-outer {
-  position: fixed;
-  top: 0;
-  right: 0;
-  height: 100vh;
-  display: flex;
-  flex-direction: row;
-  align-items: flex-start;
-  z-index: 100;
-  margin: 0;
-  padding: 0;
-  pointer-events: none;
-  background: transparent;
-}
-
-.sidebar-animated-inner {
-  height: 100vh;
-  display: flex;
-  flex-direction: column;
-  background: transparent;
-  margin: 0;
-  padding: 0;
-  pointer-events: all;
-}
-
-.side-bar {
-  position: relative;
-  width: 100%;
-  height: 100%;
-}
-
-/* Evita que o wrapper da sidebar (que ocupa 100% da área) bloqueie
-   a interação com o grid abaixo. Habilita eventos apenas nos filhos que
-   precisam receber cliques. */
-.side-bar {
-  pointer-events: none;
-}
-.side-bar .sidebar-container,
-.side-bar .sidebar-toggle-btn {
-  pointer-events: auto;
-}
-
-.sidebar-container {
-  margin-top: 12px;
-  background-color: rgb(56, 58, 75);
-  width: 330px;
-  height: 507px;
-  margin-left: auto;
-  border-radius: 5px 0 0 5px;
-  box-shadow: -2px 0 8px rgba(0,0,0,0.08);
-  display: flex;
-  flex-direction: column;
-  transition: transform 0.35s cubic-bezier(.4,0,.2,1);
-  position: relative;
-  z-index: 2;
-}
-
-body, html {
-  overflow-x: hidden !important;
-}
-
-
-.sidebar-backdrop {
-  position: fixed;
-  top: 66px; 
-  left: 0;
-  right: 0;
-  height: 537px; 
-  background: rgba(0, 0, 0, 0.50);
-  z-index: 1; 
-  pointer-events: none; 
-  transition: opacity 200ms ease;
 }
