@@ -3,6 +3,7 @@ from typing import Optional
 
 class DownloadRequest(BaseModel):
     url: str
+    format: str = "mp4"
 
 class DownloadStatus(BaseModel):
     job_id: str

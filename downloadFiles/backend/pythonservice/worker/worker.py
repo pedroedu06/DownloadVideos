@@ -123,18 +123,39 @@ def process_job(job_id: str, url: Optional[str]):
             r.set(f"download:{job_id}:status", "processing")
             _log_structured("download_finished", {"job_id": job_id})
 
+    # Ler o formato desejado salvo no Redis (mp4, mp3, webm)
+    desired_format = (r.get(f"download:{job_id}:format") or "mp4").lower()
+
+    audio_formats = {"mp3", "wav", "aac", "m4a", "opus", "flac"}
+
+    # opções base comuns
     ydl_opts = {
         "progress_hooks": [hook],
         "outtmpl": str(DOWNLOAD_DIR / "%(title)s-%(id)s.%(ext)s"),
-        "format": "bv*+ba/b",
-        "merge_output_format": "mp4",
-        "postprocessors": [{
-            "key": "FFmpegVideoConvertor",
-            "preferedformat": "mp4",
-        }],
         "js-runtimes": ["node"],
         "quiet": True,
     }
+
+    if desired_format in audio_formats:
+        # extrair apenas o áudio e converter para o codec desejado
+        ydl_opts.update({
+            "format": "bestaudio/best",
+            "postprocessors": [{
+                "key": "FFmpegExtractAudio",
+                "preferredcodec": desired_format,
+                "preferredquality": "192",
+            }],
+        })
+    else:
+        # formatos de vídeo: mp4, webm, etc.
+        ydl_opts.update({
+            "format": "bv*+ba/b",
+            "merge_output_format": desired_format if desired_format else "mp4",
+            "postprocessors": [{
+                "key": "FFmpegVideoConvertor",
+                "preferedformat": desired_format if desired_format else "mp4",
+            }],
+        })
 
     try:
         with YoutubeDL(ydl_opts) as ydl:

@@ -1,0 +1,59 @@
+.modalContainer {
+    background-color: rgba(0, 0, 0, 0.5);
+    position: fixed;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    inset: 0;
+    z-index: 1000;
+}
+
+.modalContent {
+    background-color: rgb(56, 58, 75);
+    padding: 8px 10px;
+    border-radius: 8px;
+    width: 280px;
+}
+
+.modalHeader {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+}
+
+.modalHeader h2 {
+    margin: 0;
+    padding: 0 8px 0 0;
+    font-size: 18px;
+    line-height: 1;
+    color: #fff;
+}
+
+.closeBtn {
+    border: none;
+    background: transparent;
+    color: white;
+    font-size: 30px;
+    cursor: pointer;
+}
+
+.formatSelections {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    margin-top: 4px;
+}
+
+.formatItem {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.downloadBtn {
+    display: block;
+    margin: 12px auto 0 auto;
+    padding: 5px;
+    width: 100px;
+    cursor: pointer;
+}
