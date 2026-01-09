@@ -32,7 +32,7 @@ const home: React.FC = () => {
       console.log('Download iniciado:', response.data);
       const jobId = response.data.job_id || response.data.jobId || crypto.randomUUID();
 
-      setPreviews(prev => [{ id: jobId, title: currentPreview?.title || 'unknown', thumbnail: currentPreview?.thumbnail || 'unknown' }, ...prev]);
+      setPreviews(prev => [{ id: jobId, title: currentPreview?.title || 'unknown', thumbnail: currentPreview?.thumbnail || '' }, ...prev]);
       setOpen(true);
       setCurrentPreview(null);
 
@@ -55,6 +55,12 @@ const home: React.FC = () => {
     } catch (error) {
       console.log('error no preview', error);
     }
+  }
+
+  const handleDownloadofGrid = (videoId: string) => {
+     const link = `https://www.youtube.com/watch?v=${videoId}`;
+     setLink(link)
+     handlePreviewDownload()
   }
 
   return (
@@ -81,7 +87,7 @@ const home: React.FC = () => {
       </section>
 
       <section className="YT-Feed">
-        <VideoGrid />
+        <VideoGrid onClickDonwload={handleDownloadofGrid}/>
       </section>
 
       {open && <div className="sidebar-backdrop" />}

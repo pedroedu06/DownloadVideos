@@ -3,7 +3,7 @@ import './VideoGrid.css';
 import CardVideo from './CardVideo';
 import { useEffect, useState } from 'react';
 
-type Video = {
+type VideoProps = {
     id: string;
     thumbnail: string;
     title: string;
@@ -11,27 +11,32 @@ type Video = {
     views: number;
 };
 
-// aqui ele gera os componente, com base no componente pai.
-const VideoGrid: React.FC = () => {
+type VideoDonwloadGrid = {
+    onClickDonwload: (videoId: string) => void
+}
 
-const [video, setVideos] = useState<Video[]>([]);
+
+// aqui ele gera os componentes, com base no componente pai.
+const VideoGrid: React.FC<VideoDonwloadGrid> = ({onClickDonwload}) => {
+
+const [videos, setVideos] = useState<VideoProps[]>([]);
 //pega os dados da api do yt
-    useEffect(() => {
-        fetch('http://localhost:3000/feed')
-            .then(res => res.json())
-            .then((dataVideos: Video[]) => {
-                if (!Array.isArray(dataVideos)) return;
-                setVideos(dataVideos);
-            })
-    }, []);
+  useEffect(() => {
+    fetch('http://localhost:3000/feed')
+      .then(res => res.json())
+      .then((dataVideos: VideoProps[]) => {
+        if (!Array.isArray(dataVideos)) return;
+        setVideos(dataVideos);
+      });
+  }, []);
 
 
-return (
+  return (
     <div className="vv-grid-outer" role="region" aria-label="Video grid">
         <div className="vv-grid-scroll">
             <div className="vv-grid-inner">
-                {video.map((videos) => (
-                    <CardVideo key={videos.id} thumbnail={videos.thumbnail} title={videos.title} likes={videos.likes} views={videos.views} />
+                {videos.map((v) => (
+                    <CardVideo key={v.id} Video={v} onClickDownload={onClickDonwload} />
                 ))}
             </div>
         </div>
