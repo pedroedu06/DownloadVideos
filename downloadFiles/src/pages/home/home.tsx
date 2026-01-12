@@ -3,12 +3,12 @@ import { IoMdDownload } from "react-icons/io";
 import { CiSettings } from "react-icons/ci";
 import { MdKeyboardArrowLeft } from "react-icons/md";
 import { useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { GrUpdate } from "react-icons/gr";
 import VideoGrid from '../../components/VideoGrid';
 import axios from "axios";
 import CardDownloadprogress from "../../components/CardDownloadprogress";
 import ModalSelectedFormat from "../../components/ModalSelectedFormat";
-
 
 const home: React.FC = () => {
   //reload na pagina, tipo um f5
@@ -22,6 +22,7 @@ const home: React.FC = () => {
   const [previews, setPreviews] = useState<Array<{ id: string, title: string, thumbnail: string }>>([]);
   const [modalOpen, setModalOpen] = useState(false);
   const [currentPreview, setCurrentPreview] = useState<{ title: string, thumbnail: string } | null>(null);
+  const navigateSettings = useNavigate();
 
 
   // aqui confirma o seu donwload e envia para o worker
@@ -63,6 +64,10 @@ const home: React.FC = () => {
      handlePreviewDownload()
   }
 
+  const handleSettingsNav = () => {
+    navigateSettings('/settings')
+  }
+
   return (
     <div className="mainContainer">
       <section className="searchbar-configbtns">
@@ -73,7 +78,7 @@ const home: React.FC = () => {
         </div>
         <div className="buttons-config">
           <button className="updatepage-btn" onClick={reload}><GrUpdate /></button>
-          <button className="settings-btn"><CiSettings /></button>
+          <button className="settings-btn" onClick={handleSettingsNav}><CiSettings /></button>
         </div>
       </section>
 

@@ -1,0 +1,97 @@
+:root{
+    --bg: #222532;
+    --sidebar: rgb(43, 45, 59);
+    --text: #ffffff;
+    --muted: #bfc6cc;
+    --border: rgba(255,255,255,0.12);
+    --header-height: 28px; /* altura da faixa superior que não deve ser coberta */
+}
+
+html, body, #root {
+    height: 100%;
+    margin: 0;
+}
+
+.mainContainer{
+    display: flex;
+    align-items: flex-start; /* garante alinhamento no topo */
+    min-height: 100vh;
+    background: var(--bg);
+    color: var(--text);
+    font-family: Inter, Roboto, sans-serif;
+}
+
+/* barra lateral (linha azul) */
+.lateralBar{
+    width: 200px;
+    /* barra lateral reduzida em altura (não ocupa toda a janela) */
+    position: fixed;
+    top: var(--header-height); /* não invade a faixa superior */
+    height: 580px; /* altura reduzida */
+    padding: 10px 12px;
+    box-sizing: border-box;
+    background: var(--sidebar);
+    border-right: 1px solid rgba(255,255,255,0.04);
+    box-shadow: 1px 3px 1px rgba(0,0,0,0.3);
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    left: 0;
+    z-index: 20;
+}
+
+/* botão Voltar com borda (área amarela) */
+.backBtn{
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 10px;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    background: transparent;
+    color: var(--text);
+    cursor: pointer;
+    user-select: none;
+    width: 100%;
+    box-sizing: border-box;
+}
+
+.backBtn svg{
+    font-size: 18px;
+    line-height: 1;
+}
+
+/* área principal à direita da barra (onde ficará "Configurações") */
+.mainSection{
+    /* reserva espaço à direita da barra fixa */
+    margin-left: 190px;
+    /* garantir que o conteúdo principal comece abaixo da faixa superior */
+    padding: calc(var(--header-height) + 8px) 28px 16px 28px;
+    box-sizing: border-box;
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    justify-content: flex-start; /* garante que o conteúdo comece no topo */
+}
+
+/* cabeçalho da página */
+.titleSettings{
+    margin: 0;
+    padding-top: 0px;
+    font-size: 34px;
+    font-weight: 700;
+    color: var(--text);
+}
+
+/* Faz com que o título fique visualmente alinhado com a parte superior da lateral */
+.mainSection > .titleSettings{
+    align-self: flex-start;
+}
+
+@media (max-width: 800px){
+    .lateralBar{ width: 72px; padding: 12px; }
+    .titleSettings{ font-size: 24px; }
+}
+
+
+
