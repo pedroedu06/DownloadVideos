@@ -7,11 +7,6 @@
     --header-height: 28px; /* altura da faixa superior que não deve ser coberta */
 }
 
-html, body, #root {
-    height: 100%;
-    margin: 0;
-}
-
 .mainContainer{
     display: flex;
     align-items: flex-start; /* garante alinhamento no topo */
@@ -24,10 +19,10 @@ html, body, #root {
 /* barra lateral (linha azul) */
 .lateralBar{
     width: 200px;
-    /* barra lateral reduzida em altura (não ocupa toda a janela) */
+    /* barra lateral fixa ocupando toda a altura disponível abaixo do header */
     position: fixed;
     top: var(--header-height); /* não invade a faixa superior */
-    height: 580px; /* altura reduzida */
+    height: calc(100vh - var(--header-height));
     padding: 10px 12px;
     box-sizing: border-box;
     background: var(--sidebar);
@@ -64,14 +59,41 @@ html, body, #root {
 /* área principal à direita da barra (onde ficará "Configurações") */
 .mainSection{
     /* reserva espaço à direita da barra fixa */
-    margin-left: 190px;
+    margin-left: 200px;
     /* garantir que o conteúdo principal comece abaixo da faixa superior */
     padding: calc(var(--header-height) + 8px) 28px 16px 28px;
     box-sizing: border-box;
-    min-height: 100vh;
+    /* fixa a altura disponível para a área principal e permite scroll interno */
+    height: calc(100vh - var(--header-height));
+    /* ocupa todo o espaço restante à direita da lateral fixa */
+    width: calc(100% - 200px);
     display: flex;
     flex-direction: column;
     justify-content: flex-start; /* garante que o conteúdo comece no topo */
+    overflow-y: auto;
+    overflow-x: hidden;
+}
+
+/* Estilização leve da barra de rolagem apenas nesta página */
+.mainSection::-webkit-scrollbar {
+    width: 10px;
+}
+.mainSection::-webkit-scrollbar-track {
+    background: transparent;
+}
+.mainSection::-webkit-scrollbar-thumb {
+    background: linear-gradient(180deg, rgba(255,255,255,0.06), rgba(255,255,255,0.03));
+    border-radius: 999px;
+    border: 2px solid rgba(0,0,0,0.12);
+}
+.mainSection::-webkit-scrollbar-thumb:hover {
+    background: rgba(255,255,255,0.12);
+}
+@supports (scrollbar-width: thin) {
+    .mainSection {
+        scrollbar-width: thin;
+        scrollbar-color: rgba(255,255,255,0.06) transparent;
+    }
 }
 
 /* cabeçalho da página */
@@ -93,5 +115,88 @@ html, body, #root {
     .titleSettings{ font-size: 24px; }
 }
 
+.videoFormatsSelect {
+    margin-top: 30px;
+    margin-bottom: 10px;
+    border-bottom: 0.5px solid rgba(255, 255, 255, 0.3);
+    display: flex;
+    gap: 80px;
+    padding-bottom: 40px;
+    position: relative; 
+    align-items: center; 
+}
+
+.selectVideoFormat {
+    display: flex;
+    flex-direction: column;
+    margin-top: 0; 
+}
+
+.selectFormatStandard {
+    padding: 10px;
+    width: 150px;
+    background-color: #262936e0;
+    color: white;
+    border-radius: 10px;
+    margin-right: 100px;
+}
+
+.select {
+    display: flex;
+    align-items: center;
+    gap: 24px; 
+}
 
 
+.saveBtn {
+    padding: 8px;
+    width: 100px;
+    color: #fff;
+    border-radius: 10px;
+    cursor: pointer;
+    background: linear-gradient(
+    135deg,
+    #262c3c,
+    #2c3246
+  );
+}
+
+
+.videoFormatsSelect .saveBtn:first-of-type {
+    position: absolute;
+    right: 40px;
+    top: 50%;
+    transform: translateY(-50%);
+    margin-top: 0;
+    z-index: 10;
+}
+
+@media (max-width: 800px){
+    .videoFormatsSelect .saveBtn:first-of-type{ position: static; transform: none; margin-top: 12px; width: 100px; }
+}
+
+ 
+
+.limparBtn {
+    margin-top: 20px;
+    padding: 10px;
+    width: 120px;
+    background-color: #222532;
+    color: #fff;
+    border-radius: 5px;
+    cursor: pointer;
+}
+
+.row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 10px 0;
+}
+
+.LabelBtns {
+    margin-right: 50px;
+}
+
+.selectVideoFormat label{ margin-bottom: 8px; display: block; color: var(--muted); }
+.selectVideoFormat .select { align-items: center; }

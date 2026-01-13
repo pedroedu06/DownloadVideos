@@ -1,15 +1,16 @@
 
 .searchbar-configbtns {
 	display: flex;
-	height: 80px;
+	height: 40px;
 	border-bottom: 1px solid rgb(56, 58, 75);
 	margin-top: 4px;
+	width: 100%;
 }
 
 .search-bar {
 	border: none;
 	padding: 5px;
-	width: 400px;
+	width: 430px;
 	height: 32px;
   
 	margin-right: 0;
@@ -113,7 +114,7 @@
 .side-bar {
 	position: relative;
 	width: 100%;
-	height: 100%;
+	height: 550px;
 }
 
 /* Evita que o wrapper da sidebar (que ocupa 100% da área) bloqueie
@@ -131,7 +132,7 @@
 	margin-top: 12px;
 	background-color: rgb(56, 58, 75);
 	width: 330px;
-	height: 507px;
+	height: 550px;
 	margin-left: auto;
 	border-radius: 5px 0 0 5px;
 	box-shadow: -2px 0 8px rgba(0,0,0,0.08);
@@ -144,7 +145,7 @@
 
 .sidebar-backdrop {
 	position: fixed;
-	top: 35px; 
+	top: 27px; 
 	left: 0;
 	right: 0;
 	bottom: 0;
