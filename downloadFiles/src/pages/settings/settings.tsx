@@ -1,10 +1,33 @@
 import { IoChevronBack } from "react-icons/io5";
 import { useNavigate } from "react-router-dom";
 import './settings.css'
-
+import { open } from '@tauri-apps/plugin-dialog';
+import axios from "axios";
+import { useState } from "react";
 
 const Settings = () => {
     const nav = useNavigate();
+    const [path, setPath] = useState<string | null>(null);
+
+    const handleSavePath = async () => {
+        const dir = await open({
+            directory: true,
+            multiple: false
+        })
+
+        if (typeof dir === "string") {
+            console.log(dir)
+            setPath(dir)
+            try {
+                await axios.post('http://localhost:8000/downloadPath', {
+                    path: dir
+                })
+            } catch (error) {
+                console.error('nao foi possivel salvar', error)
+            }
+        }
+    }
+
 
     const handleNav = () => {
         nav('/home')
@@ -21,61 +44,70 @@ const Settings = () => {
             <section className="mainSection">
                 <h2 className="titleSettings">Configuracoes</h2>
                 <div className="storageConfig">
-
+                    <button onClick={handleSavePath}>
+                        Selecionar Pasta
+                    </button>
+                    {path && (
+                        <p style={{ marginTop: 12 }}>
+                            📁 Pasta selecionada:
+                            <br />
+                            <strong>{path}</strong>
+                        </p>
+                    )}
                 </div>
                 <div>
                     <h3>Video</h3>
-                <div className="videoFormatsSelect">
-                    <div className="selectVideoFormat">
-                        <label htmlFor="select">Selecione o formato:</label>
-                        <div className="select">
-                            <select className="selectFormatStandard" value='MP4'>
-                                <option value="MP4">MP4</option>
-                                <option value="WEBM">WEBM</option>
-                            </select>
+                    <div className="videoFormatsSelect">
+                        <div className="selectVideoFormat">
+                            <label htmlFor="select">Selecione o formato:</label>
+                            <div className="select">
+                                <select className="selectFormatStandard" value='MP4'>
+                                    <option value="MP4">MP4</option>
+                                    <option value="WEBM">WEBM</option>
+                                </select>
+                            </div>
+                        </div>
+                        <div className="selectVideoFormat">
+                            <label htmlFor="select">Selecione a qualidade:</label>
+                            <div className="select">
+                                <select className="selectFormatStandard" value='Automatico'>
+                                    <option value="Automatico">Automatico</option>
+                                    <option value="480p">480p</option>
+                                    <option value="720p">720p</option>
+                                    <option value="1080p">1080p</option>
+                                </select>
+                                <button className="saveBtn">Salvar</button>
+                            </div>
                         </div>
                     </div>
-                    <div className="selectVideoFormat">
-                        <label htmlFor="select">Selecione a qualidade:</label>
-                        <div className="select">
-                            <select className="selectFormatStandard" value='Automatico'>
-                                <option value="Automatico">Automatico</option>
-                                <option value="480p">480p</option>
-                                <option value="720p">720p</option>
-                                <option value="1080p">1080p</option>
-                            </select>
-                            <button className="saveBtn">Salvar</button>
-                        </div>
-                    </div>
-                </div>
                 </div>
                 <div>
                     <h3>Audio</h3>
-                <div className="videoFormatsSelect">
-                    <div className="selectVideoFormat">
-                        <label htmlFor="select" className="label1">Selecione o formato de audio:</label>
-                        <div className="select">
-                            <select className="selectFormatStandard" value='MP3'>
-                                <option value="MP3">MP3</option>
-                                <option value="AAC">AAC</option>
-                                <option value="WAV">WAV (qualidade alta)</option>
-                            </select>
+                    <div className="videoFormatsSelect">
+                        <div className="selectVideoFormat">
+                            <label htmlFor="select" className="label1">Selecione o formato de audio:</label>
+                            <div className="select">
+                                <select className="selectFormatStandard" value='MP3'>
+                                    <option value="MP3">MP3</option>
+                                    <option value="AAC">AAC</option>
+                                    <option value="WAV">WAV (qualidade alta)</option>
+                                </select>
 
-                            <button className="saveBtn">Salvar</button>
+                                <button className="saveBtn">Salvar</button>
+                            </div>
+                        </div>
+                        <div className="selectVideoFormat">
+                            <label htmlFor="select" className="label1">Selecione a qualidade de audio:</label>
+                            <div className="select">
+                                <select className="selectFormatStandard" value='128 kbps'>
+                                    <option value="128 kbps">128 kbps</option>
+                                    <option value="192 kbps">192 kbps</option>
+                                    <option value="320 kbps">320 kbps</option>
+                                </select>
+
+                            </div>
                         </div>
                     </div>
-                    <div className="selectVideoFormat">
-                        <label htmlFor="select" className="label1">Selecione a qualidade de audio:</label>
-                        <div className="select">
-                            <select className="selectFormatStandard" value='128 kbps'>
-                                <option value="128 kbps">128 kbps</option>
-                                <option value="192 kbps">192 kbps</option>
-                                <option value="320 kbps">320 kbps</option>
-                            </select>
-
-                        </div>
-                    </div>
-                </div>
                 </div>
                 <div>
                     <h3>Manutencao</h3>

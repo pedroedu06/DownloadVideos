@@ -4,6 +4,7 @@
   "description": "Capability for the main window",
   "windows": ["main"],
   "permissions": [
+    "dialog:allow-open",
     "core:default",
     "core:resources:default",
     "core:window:allow-close",

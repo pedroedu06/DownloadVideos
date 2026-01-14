@@ -9,3 +9,6 @@ class DownloadStatus(BaseModel):
     job_id: str
     status: Optional[str] = "queued"
     progress: float    
+
+class DownloadDIR(BaseModel):
+    path: str

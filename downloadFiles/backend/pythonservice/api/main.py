@@ -2,7 +2,7 @@ from fastapi import FastAPI, Body, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from uuid import uuid4
 from api.redisClient import redisClient
-from api.schemas import DownloadRequest, DownloadStatus
+from api.schemas import DownloadRequest, DownloadStatus, DownloadDIR
 
 
 # aqui encapsula os valores de progresso do donwload do redis, assim facilita reutilizar em outros lugares
@@ -72,3 +72,24 @@ def cancel_download(job_id: str):
     redisClient.set(f"download:{job_id}:status", "cancelled")
     redisClient.set(f"download:{job_id}:progress", 0)
     return {"job_id": job_id, "cancelled": True}
+
+@app.post('/downloadPath')
+def downloadsetPath(data: DownloadDIR):
+    redisClient.set('download:dir', data.path)
+    return {"status": "ok!"} 
+
+
+@app.post('/downloadSettings')
+def set_download_settings(settings: dict = Body(...)):
+    mapping = {
+        'default_video_format': 'settings:default:video_format',
+        'default_audio_format': 'settings:default:audio_format',
+        'video_quality': 'settings:video:quality',
+        'audio_quality': 'settings:audio:quality',
+    }
+
+    for k, v in settings.items():
+        if k in mapping and v is not None:
+            redisClient.set(mapping[k], str(v))
+
+    return {"status": "ok"}

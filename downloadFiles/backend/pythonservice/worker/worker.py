@@ -15,8 +15,10 @@ from yt_dlp import YoutubeDL
 REDIS_CLIENT = os.getenv('REDIS_HOST', 'localhost')
 r = redis.Redis(host=REDIS_CLIENT, port=6379, decode_responses=True)
 
-# diretório padrao de download 
-DOWNLOAD_DIR = Path(os.getenv('DOWNLOAD_PATH', '/downloads'))
+# diretório padrao de download (lido do redis se existir)
+# função DEFAULT criada mas não implementada pelo dev (vai lançar NotImplementedError)
+DOWNLOAD_PATH_DEFAULT = Path.home() / "Downloads"
+    
 
 # Configuracoes de worker, como maximo de retrys, tempo de Lock na fila e segundos de espera para cada tentativa
 MAX_RETRIES = 3
@@ -122,11 +124,40 @@ def process_job(job_id: str, url: Optional[str]):
             r.set(f"download:{job_id}:status", "processing")
             _log_structured("download_finished", {"job_id": job_id})
 
-    # Ler o formato desejado salvo no Redis (mp4, mp3, webm)
-    desired_format = (r.get(f"download:{job_id}:format") or "mp4").lower()
+    # Determinar tipo do job: 'video' (default) ou 'audio'
+    job_type = (r.get(f"download:{job_id}:type") or "video").lower()
 
-    #aqui sao os formatos que o yt-dlp pode processar 
+    # Ler o formato desejado salvo no job (tem prioridade)
+    job_format = r.get(f"download:{job_id}:format")
+
+    # se não tem formato no job, buscar defaults globais em redis conforme tipo
+    if job_format:
+        desired_format = job_format.lower()
+    else:
+        if job_type == "audio":
+            desired_format = (r.get("settings:default:audio_format") or "mp3").lower()
+        else:
+            desired_format = (r.get("settings:default:video_format") or "mp4").lower()
+
+    # Qualidade: priorizar valor por-job, senão usar config global, senão padrão
+    audio_quality = r.get(f"download:{job_id}:audio_quality") or r.get("settings:audio:quality") or "192"
+    video_quality = r.get(f"download:{job_id}:video_quality") or r.get("settings:video:quality")
+
+    # formatos suportados para extrair audio
     audio_formats = {"mp3", "wav", "aac", "m4a", "opus", "flac"}
+
+    # Determinar DOWNLOAD_DIR: usar valor em redis se existir, senão tentar DEFAULT, senão fallback env
+    download_dir_raw = r.get("download:dir")
+    try:
+        if download_dir_raw:
+            DOWNLOAD_DIR = Path(download_dir_raw)
+        else:
+            try:
+                DOWNLOAD_DIR = Path(DOWNLOAD_PATH_DEFAULT)
+            except NotImplementedError:
+                DOWNLOAD_DIR = Path(os.getenv('DOWNLOAD_PATH', '/downloads'))
+    except Exception:
+        DOWNLOAD_DIR = Path(os.getenv('DOWNLOAD_PATH', '/downloads'))
 
     # opções base comuns
     ydl_opts = {
@@ -136,20 +167,21 @@ def process_job(job_id: str, url: Optional[str]):
         "quiet": True,
     }
 
-    if desired_format in audio_formats:
+    if job_type == "audio" or desired_format in audio_formats:
         # extrair apenas o áudio e converter para o codec desejado
         ydl_opts.update({
             "format": "bestaudio/best",
             "postprocessors": [{
                 "key": "FFmpegExtractAudio",
                 "preferredcodec": desired_format,
-                "preferredquality": "192",
+                "preferredquality": str(audio_quality),
             }],
         })
     else:
-        # formatos de vídeo: mp4, webm, etc.
+        # formatos de vídeo: usar qualidade global se fornecida como string de formato
+        fmt_option = video_quality if video_quality else "bv*+ba/b"
         ydl_opts.update({
-            "format": "bv*+ba/b",
+            "format": fmt_option,
             "merge_output_format": desired_format if desired_format else "mp4",
             "postprocessors": [{
                 "key": "FFmpegVideoConvertor",
