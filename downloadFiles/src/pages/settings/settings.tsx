@@ -3,7 +3,7 @@ import { useNavigate } from "react-router-dom";
 import './settings.css'
 import { open } from '@tauri-apps/plugin-dialog';
 import axios from "axios";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 
 const Settings = () => {
     const nav = useNavigate();
@@ -14,8 +14,8 @@ const Settings = () => {
     const [audioQuality, setaudioQuality] = useState<string | null>(null)
 
     const handlesavevideoConfigs = async () => {
-        console.log(videoQuality)
-        console.log(videoFormat)
+        localStorage.setItem("videoFormat", videoFormat ?? "auto")
+        localStorage.setItem("videoQuality", videoQuality ?? "auto")
         try {
             await axios.post("http://localhost:8000/downloadSettings", {
                 default_video_format: videoFormat,
@@ -27,6 +27,8 @@ const Settings = () => {
     }
 
     const handlesaveaudioConfigs = async () => {
+        localStorage.setItem("audioFormat", audioFormat ?? "auto")
+        localStorage.setItem("audioQuality", audioQuality ?? "auto")
         try {
             await axios.post("http://localhost:8000/downloadSettings", {
                 default_audio_format: audioFormat,
@@ -60,6 +62,19 @@ const Settings = () => {
     const handleNav = () => {
         nav('/home')
     }
+
+    useEffect(() => {
+        const vf = localStorage.getItem("videoFormat")
+        const vq = localStorage.getItem("videoQuality")
+        const af = localStorage.getItem("audioFormat")
+        const aq = localStorage.getItem("audioQuality")
+
+        setvideoFormat(vf === "auto" ? null : vf)
+        setvideoQuality(vq === "auto" ? null : vq)
+        setaudioFormat(af === "auto" ? null : af)
+        setaudioQuality(aq === "auto" ? null : aq)
+    }, [])
+
 
     return (
         <div className="mainContainer">
@@ -147,11 +162,6 @@ const Settings = () => {
 
                     <div className="row">
                         <span className="LabelBtns">Limpar downloads:</span>
-                        <button className="limparBtn">Limpar</button>
-                    </div>
-
-                    <div className="row">
-                        <span className="LabelBtns">Limpar Downloads com erro:</span>
                         <button className="limparBtn">Limpar</button>
                     </div>
                 </div>
