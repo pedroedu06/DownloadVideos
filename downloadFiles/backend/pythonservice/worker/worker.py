@@ -107,14 +107,21 @@ def process_job(job_id: str, url: Optional[str]):
         if r.get(cancel_key):
             raise Exception("cancelled by user")
         if status == "downloading":
-            # yt_dlp fornece uma string como "12.3%" em _percent_str
-            percent_raw = d.get("_percent_str") or d.get("percent") or "0%"
-            try:
-                percent = float(str(percent_raw).replace("%", "").strip())
-            except Exception:
-                percent = 0.0
-            # armazena progresso como número (0-100)
-            r.set(f"download:{job_id}:progress", percent)
+            downloaded = d.get('downloaded_bytes', 0)
+            total = (d.get("total_bytes") or d.get('total_bytes_estimate') or 0)
+
+            percent = 0.0
+
+            if total > 0:
+                percent = downloaded / total * 100
+            else:
+                frag_index = d.get("fragment_index")
+                frag_count = d.get("fragment_count")
+
+                if frag_index and frag_count:
+                    percent = (frag_index / frag_count) * 100
+            
+            r.set(f"download:{job_id}:progress", percent, 2)
             r.set(f"download:{job_id}:status", "downloading")
             _log_structured("progress", {"job_id": job_id, "progress": percent})
 
@@ -139,9 +146,28 @@ def process_job(job_id: str, url: Optional[str]):
         else:
             desired_format = (r.get("settings:default:video_format") or "mp4").lower()
 
-    # Qualidade: priorizar valor por-job, senão usar config global, senão padrão
-    audio_quality = r.get(f"download:{job_id}:audio_quality") or r.get("settings:audio:quality") or "192"
-    video_quality = r.get(f"download:{job_id}:video_quality") or r.get("settings:video:quality")
+    #Normaliza o valor da qualidade
+    def normalize_quality(q):
+        if not q:
+            return None
+        q = str(q).lower().strip()
+        q = q.replace("p", "").replace("fps", "")
+        return q if q.isdigit() else None
+
+    #e retorna os valores necessarios
+    raw_vq = (
+    r.get(f"download:{job_id}:video_quality")
+    or r.get("settings:video:quality"))
+
+    #pro audio e a mesma coisa que o video, so que mais simples.
+    raw_aq = (
+    r.get(f"download:{job_id}:audio_quality")
+    or r.get("settings:audio:quality")
+    or "192")
+
+    audio_quality = raw_aq.strip() if raw_aq.isdigit() else "192"
+
+    video_quality = normalize_quality(raw_vq)
 
     # formatos suportados para extrair audio
     audio_formats = {"mp3", "wav", "aac", "m4a", "opus", "flac"}
@@ -158,14 +184,16 @@ def process_job(job_id: str, url: Optional[str]):
                 DOWNLOAD_DIR = Path(os.getenv('DOWNLOAD_PATH', '/downloads'))
     except Exception:
         DOWNLOAD_DIR = Path(os.getenv('DOWNLOAD_PATH', '/downloads'))
-
+        
+    
     # opções base comuns
     ydl_opts = {
         "progress_hooks": [hook],
         "outtmpl": str(DOWNLOAD_DIR / "%(title)s-%(id)s.%(ext)s"),
         "js-runtimes": ["node"],
-        "quiet": True,
     }
+
+    fmt_option = None  
 
     if job_type == "audio" or desired_format in audio_formats:
         # extrair apenas o áudio e converter para o codec desejado
@@ -177,19 +205,22 @@ def process_job(job_id: str, url: Optional[str]):
                 "preferredquality": str(audio_quality),
             }],
         })
+    
     else:
-        # formatos de vídeo: usar qualidade global se fornecida como string de formato
-        fmt_option = video_quality if video_quality else "bv*+ba/b"
+        if video_quality:
+            fmt_option = f"bv*[height<={video_quality}]+ba/b"
+        else:
+            fmt_option = "bv*+ba/b"
+
         ydl_opts.update({
             "format": fmt_option,
-            "merge_output_format": desired_format if desired_format else "mp4",
-            "postprocessors": [{
-                "key": "FFmpegVideoConvertor",
-                "preferedformat": desired_format if desired_format else "mp4",
-            }],
+            "merge_output_format": desired_format if desired_format else "mp4"
         })
 
     try:
+        print("RAW VQ:", raw_vq)
+        print("qualidade video", video_quality)
+        print("formato desejado", fmt_option)
         with YoutubeDL(ydl_opts) as ydl:
             ydl.download([url])
 

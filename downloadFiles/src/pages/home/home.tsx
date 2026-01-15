@@ -26,14 +26,14 @@ const home: React.FC = () => {
 
 
   // aqui confirma o seu donwload e envia para o worker
-  const handleConfirmDownload = async (format: string) => {
+  const handleConfirmDownload = async (type: string) => {
     setModalOpen(false);
     try {
-      const response = await axios.post('http://localhost:8000/downloadtask', { url: link, format });
+      const response = await axios.post('http://localhost:8000/downloadtask', { url: link, type });
       console.log('Download iniciado:', response.data);
       const jobId = response.data.job_id || response.data.jobId || crypto.randomUUID();
 
-      setPreviews(prev => [{ id: jobId, title: currentPreview?.title || 'unknown', thumbnail: currentPreview?.thumbnail || '' }, ...prev]);
+      setPreviews(prev => [{ id: jobId, title: currentPreview?.title || 'unknown', thumbnail: currentPreview?.thumbnail ?? "" }, ...prev]);
       setOpen(true);
       setCurrentPreview(null);
 

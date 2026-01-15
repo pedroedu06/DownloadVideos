@@ -36,12 +36,10 @@ app.add_middleware(
 def create_download(data: DownloadRequest):
     job_id = str(uuid4())
 
+    redisClient.set(f"download:{job_id}:type", data.type)
     redisClient.set(f"download:{job_id}:status", "queued")
     redisClient.set(f"download:{job_id}:progress", 0)
     redisClient.set(f"download:{job_id}:url", data.url)
-    # salvar o formato desejado (mp4, mp3, webm)
-    fmt = (data.format or "mp4").lower()
-    redisClient.set(f"download:{job_id}:format", fmt)
 
     redisClient.expire(f"download:{job_id}:status", 3600)
     redisClient.expire(f"download:{job_id}:progress", 3600)

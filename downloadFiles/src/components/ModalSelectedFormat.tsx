@@ -5,12 +5,12 @@ import { useState } from 'react';
 type ModalProps = {
     isOpen: boolean;
     onClose: () => void;
-    onConfirm: (format: string) => void;
+    onConfirm: (type: string) => void;
 }
 
 //modal de selecao de formato de donwload.
 const ModalSelectedFormat: React.FC<ModalProps> = ({isOpen, onClose, onConfirm}) => {
-    const [format, setFormat] = useState('mp4');
+    const [type, setType] = useState('');
 
     if (!isOpen) return null;
 
@@ -22,20 +22,16 @@ const ModalSelectedFormat: React.FC<ModalProps> = ({isOpen, onClose, onConfirm})
                     <button className='closeBtn' onClick={onClose}><IoIosClose /></button>
                 </div>
                 <div className='formatSelections'>
-                    <label className='formatItem' htmlFor="mp4">
-                        <span>MP4</span>
-                        <input type="radio" name="format" id="mp4" checked={format === 'mp4'} onChange={() => setFormat('mp4')} />
+                    <label className='formatItem' htmlFor="Video">
+                        <span>Video</span>
+                        <input type="radio" name="format" id="video" checked={type === 'video'} onChange={() => setType('video')} />
                     </label>
-                    <label className='formatItem' htmlFor="mp3">
-                        <span>MP3</span>
-                        <input type="radio" name="format" id="mp3" checked={format === 'mp3'} onChange={() => setFormat('mp3')} />
-                    </label>
-                    <label className='formatItem' htmlFor="webm">
-                        <span>WEBM</span>
-                        <input type="radio" name="format" id="webm" checked={format === 'webm'} onChange={() => setFormat('webm')} />
+                    <label className='formatItem' htmlFor="Audio">
+                        <span>Audio</span>
+                        <input type="radio" name="format" id="audio" checked={type === 'audio'} onChange={() => setType('audio')} />
                     </label>
                 </div>
-                <button className='downloadBtn' onClick={() => {onConfirm(format)}}>Baixar</button>
+                <button className='downloadBtn' onClick={() => {onConfirm(type)}}>Baixar</button>
             </div>
         </div>
     )

@@ -8,6 +8,35 @@ import { useState } from "react";
 const Settings = () => {
     const nav = useNavigate();
     const [path, setPath] = useState<string | null>(null);
+    const [videoQuality, setvideoQuality] = useState<string | null>(null)
+    const [videoFormat, setvideoFormat] = useState<string | null>(null)
+    const [audioFormat, setaudioFormat] = useState<string | null>(null)
+    const [audioQuality, setaudioQuality] = useState<string | null>(null)
+
+    const handlesavevideoConfigs = async () => {
+        console.log(videoQuality)
+        console.log(videoFormat)
+        try {
+            await axios.post("http://localhost:8000/downloadSettings", {
+                default_video_format: videoFormat,
+                video_quality: videoQuality
+            })
+        } catch (error) {
+            console.error("nao foi possivel salvar os formatos (talvez seja os nomes!)", error)
+        }
+    }
+
+    const handlesaveaudioConfigs = async () => {
+        try {
+            await axios.post("http://localhost:8000/downloadSettings", {
+                default_audio_format: audioFormat,
+                audio_quality: audioQuality
+            })
+        } catch (error) {
+            console.error("nao foi possivel salvar os formatos (talvez seja os nomes!)", error)
+        }
+    }
+
 
     const handleSavePath = async () => {
         const dir = await open({
@@ -16,7 +45,6 @@ const Settings = () => {
         })
 
         if (typeof dir === "string") {
-            console.log(dir)
             setPath(dir)
             try {
                 await axios.post('http://localhost:8000/downloadPath', {
@@ -49,7 +77,7 @@ const Settings = () => {
                     </button>
                     {path && (
                         <p style={{ marginTop: 12 }}>
-                            📁 Pasta selecionada:
+                            Pasta selecionada:
                             <br />
                             <strong>{path}</strong>
                         </p>
@@ -61,7 +89,8 @@ const Settings = () => {
                         <div className="selectVideoFormat">
                             <label htmlFor="select">Selecione o formato:</label>
                             <div className="select">
-                                <select className="selectFormatStandard" value='MP4'>
+                                <select className="selectFormatStandard" value={videoFormat ?? 'auto'} onChange={(e) => {setvideoFormat(e.target.value === 'auto' ? null : e.target.value)}}> 
+                                    <option value="auto">Automatico</option>
                                     <option value="MP4">MP4</option>
                                     <option value="WEBM">WEBM</option>
                                 </select>
@@ -70,13 +99,13 @@ const Settings = () => {
                         <div className="selectVideoFormat">
                             <label htmlFor="select">Selecione a qualidade:</label>
                             <div className="select">
-                                <select className="selectFormatStandard" value='Automatico'>
-                                    <option value="Automatico">Automatico</option>
-                                    <option value="480p">480p</option>
-                                    <option value="720p">720p</option>
-                                    <option value="1080p">1080p</option>
+                                <select className="selectFormatStandard" value={videoQuality ?? 'auto'} onChange={(e) => {setvideoQuality(e.target.value === 'auto' ? null : e.target.value)}}>
+                                    <option value="auto">Automatico</option>
+                                    <option value="480">480p</option>
+                                    <option value="720">720p</option>
+                                    <option value="1080">1080p</option>
                                 </select>
-                                <button className="saveBtn">Salvar</button>
+                                <button className="saveBtn" onClick={handlesavevideoConfigs}>Salvar</button>
                             </div>
                         </div>
                     </div>
@@ -87,24 +116,24 @@ const Settings = () => {
                         <div className="selectVideoFormat">
                             <label htmlFor="select" className="label1">Selecione o formato de audio:</label>
                             <div className="select">
-                                <select className="selectFormatStandard" value='MP3'>
+                                <select className="selectFormatStandard" value={audioFormat ?? 'auto'} onChange={(e) => {setaudioFormat(e.target.value === 'auto' ? null : e.target.value)}}>
+                                    <option value="auto">Automatico</option>
                                     <option value="MP3">MP3</option>
                                     <option value="AAC">AAC</option>
                                     <option value="WAV">WAV (qualidade alta)</option>
                                 </select>
-
-                                <button className="saveBtn">Salvar</button>
                             </div>
                         </div>
                         <div className="selectVideoFormat">
                             <label htmlFor="select" className="label1">Selecione a qualidade de audio:</label>
                             <div className="select">
-                                <select className="selectFormatStandard" value='128 kbps'>
-                                    <option value="128 kbps">128 kbps</option>
-                                    <option value="192 kbps">192 kbps</option>
-                                    <option value="320 kbps">320 kbps</option>
+                                <select className="selectFormatStandard" value={audioQuality ?? 'auto'} onChange={(e) => {setaudioQuality(e.target.value === 'auto' ? null : e.target.value)}}>
+                                    <option value="auto">Automatico</option>
+                                    <option value="128">128 kbps</option>
+                                    <option value="192">192 kbps</option>
+                                    <option value="320">320 kbps</option>
                                 </select>
-
+                                <button className="saveBtn" onClick={handlesaveaudioConfigs}>Salvar</button>
                             </div>
                         </div>
                     </div>

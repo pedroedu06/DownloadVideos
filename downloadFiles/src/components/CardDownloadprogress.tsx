@@ -36,6 +36,10 @@ const CardDownloadprogress: React.FC<Props> = ({ job_id, title, thumbnail, onClo
             try {
                 const data = await fetchDownloadStatus(job_id);
 
+                setProgress(data.progress)
+                setStatus(data.status)
+                
+
                 if (data.status === "done" || data.status === "failed") {
                     clearInterval(interval);
                 }
@@ -47,6 +51,13 @@ const CardDownloadprogress: React.FC<Props> = ({ job_id, title, thumbnail, onClo
         return () => clearInterval(interval);
     }, [job_id]);
 
+    console.log(progress);
+
+    useEffect(() => {
+        if(status === "done") {
+            onClose(job_id)
+        }
+    }, [status, job_id, onClose])
 
     return (
         <div className='cv-card-progress'>
@@ -65,7 +76,7 @@ const CardDownloadprogress: React.FC<Props> = ({ job_id, title, thumbnail, onClo
                 </div>
 
                 <div className='cv-video-info-container'>
-                    <img className='cv-video-thumbnail' src={thumbnail} alt={title} />
+                    <img className='cv-video-thumbnail' src={thumbnail || undefined} alt={title} />
                     <div className='cv-video-meta'>
                         <h3 className='cv-video-title' title={title}>{title}</h3>
                         <p className='cv-video-status-progress'>{status}</p>
