@@ -126,12 +126,12 @@ def process_job(job_id: str, url: Optional[str]):
             _log_structured("progress", {"job_id": job_id, "progress": percent})
 
         elif status == "finished":
-            # quando finalizado, marcamos processamento
+            # quando finalizado, marcamos o processo como finished
             r.set(f"download:{job_id}:progress", 100)
             r.set(f"download:{job_id}:status", "processing")
             _log_structured("download_finished", {"job_id": job_id})
 
-    # Determinar tipo do job: 'video' (default) ou 'audio'
+    # aqui determina o tipo de job enviado do usuario
     job_type = (r.get(f"download:{job_id}:type") or "video").lower()
 
     # Ler o formato desejado salvo no job (tem prioridade)
@@ -146,7 +146,10 @@ def process_job(job_id: str, url: Optional[str]):
         else:
             desired_format = (r.get("settings:default:video_format") or "mp4").lower()
 
-    #Normaliza o valor da qualidade
+    """Normaliza o valor da qualidade para somente a qualidade que o usuarios quer, por exemplo
+        se o usuario pediu que o video dele seja 480p, ele vai baixar na qualidade padrao do 480p
+        com os fps padrao etc, por isso "normaliza".
+    """
     def normalize_quality(q):
         if not q:
             return None
@@ -159,7 +162,7 @@ def process_job(job_id: str, url: Optional[str]):
     r.get(f"download:{job_id}:video_quality")
     or r.get("settings:video:quality"))
 
-    #pro audio e a mesma coisa que o video, so que mais simples.
+    #pro audio e a mesma coisa que o video, so que mais simples, pois ja tem valor fixo de 192.
     raw_aq = (
     r.get(f"download:{job_id}:audio_quality")
     or r.get("settings:audio:quality")
@@ -174,16 +177,18 @@ def process_job(job_id: str, url: Optional[str]):
 
     # Determinar DOWNLOAD_DIR: usar valor em redis se existir, senão tentar DEFAULT, senão fallback env
     download_dir_raw = r.get("download:dir")
+
+    """esse except e uma forma de garantir 100% que o seja feito e enviado ao usuario
+        tem necessidade ja que a forma foi implementada la em cima? Nao! Mas...
+        Porque nao ne?
+    """
     try:
         if download_dir_raw:
             DOWNLOAD_DIR = Path(download_dir_raw)
         else:
-            try:
-                DOWNLOAD_DIR = Path(DOWNLOAD_PATH_DEFAULT)
-            except NotImplementedError:
-                DOWNLOAD_DIR = Path(os.getenv('DOWNLOAD_PATH', '/downloads'))
+            DOWNLOAD_DIR = Path(DOWNLOAD_PATH_DEFAULT)
     except Exception:
-        DOWNLOAD_DIR = Path(os.getenv('DOWNLOAD_PATH', '/downloads'))
+        DOWNLOAD_DIR = Path.home() / 'Downloads'
         
     
     # opções base comuns
@@ -233,7 +238,7 @@ def process_job(job_id: str, url: Optional[str]):
         # registra erro estruturado
         _log_structured("job_exception", {"job_id": job_id, "error": str(e)})
 
-        # se foi cancelado explicitamente, marcar como cancelled e não re-enfileirar
+        # se foi cancelado explicitamente, marcar como cancelled e não ira re-enfileirar
         if r.get(cancel_key):
             r.set(f"download:{job_id}:status", "cancelled")
             r.set(f"download:{job_id}:error", "cancelled by user")

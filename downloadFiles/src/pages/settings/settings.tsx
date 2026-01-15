@@ -3,7 +3,9 @@ import { useNavigate } from "react-router-dom";
 import './settings.css'
 import { open } from '@tauri-apps/plugin-dialog';
 import axios from "axios";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
+import { FaFolderOpen } from "react-icons/fa";
+
 
 const Settings = () => {
     const nav = useNavigate();
@@ -48,6 +50,7 @@ const Settings = () => {
 
         if (typeof dir === "string") {
             setPath(dir)
+            localStorage.setItem("pathDownloader", dir);
             try {
                 await axios.post('http://localhost:8000/downloadPath', {
                     path: dir
@@ -63,16 +66,27 @@ const Settings = () => {
         nav('/home')
     }
 
+    const displayPath = useMemo(() => {
+        if (!path) return null
+
+        const parts = path.split("\\")
+        return parts.length > 3
+            ? `${parts[0]}\\${parts[1]}\\...\\${parts[parts.length - 1]}`
+            : parts;
+    }, [path])
+
     useEffect(() => {
         const vf = localStorage.getItem("videoFormat")
         const vq = localStorage.getItem("videoQuality")
         const af = localStorage.getItem("audioFormat")
         const aq = localStorage.getItem("audioQuality")
+        const ph = localStorage.getItem("pathDownloader")
 
         setvideoFormat(vf === "auto" ? null : vf)
         setvideoQuality(vq === "auto" ? null : vq)
         setaudioFormat(af === "auto" ? null : af)
         setaudioQuality(aq === "auto" ? null : aq)
+        setPath(ph === "undefined" ? null : ph)
     }, [])
 
 
@@ -87,16 +101,18 @@ const Settings = () => {
             <section className="mainSection">
                 <h2 className="titleSettings">Configuracoes</h2>
                 <div className="storageConfig">
-                    <button onClick={handleSavePath}>
-                        Selecionar Pasta
-                    </button>
-                    {path && (
-                        <p style={{ marginTop: 12 }}>
-                            Pasta selecionada:
-                            <br />
-                            <strong>{path}</strong>
-                        </p>
-                    )}
+                    <h3>Armazenamento</h3>
+                    <div className="storageCofigContainer">
+                        <button onClick={handleSavePath} className="armazenamentoBtn">
+                            <span style={{ color: '#ffff', marginRight: 10 }}><FaFolderOpen /></span>Selecionar Pasta
+                        </button>
+                        {path && (
+                                <p className="dirSelected">
+                                    Pasta selecionada:
+                                    <strong className="pathClass">{displayPath}</strong>
+                                </p>
+                        )}
+                    </div>
                 </div>
                 <div>
                     <h3>Video</h3>
@@ -104,7 +120,7 @@ const Settings = () => {
                         <div className="selectVideoFormat">
                             <label htmlFor="select">Selecione o formato:</label>
                             <div className="select">
-                                <select className="selectFormatStandard" value={videoFormat ?? 'auto'} onChange={(e) => {setvideoFormat(e.target.value === 'auto' ? null : e.target.value)}}> 
+                                <select className="selectFormatStandard" value={videoFormat ?? 'auto'} onChange={(e) => { setvideoFormat(e.target.value === 'auto' ? null : e.target.value) }}>
                                     <option value="auto">Automatico</option>
                                     <option value="MP4">MP4</option>
                                     <option value="WEBM">WEBM</option>
@@ -114,7 +130,7 @@ const Settings = () => {
                         <div className="selectVideoFormat">
                             <label htmlFor="select">Selecione a qualidade:</label>
                             <div className="select">
-                                <select className="selectFormatStandard" value={videoQuality ?? 'auto'} onChange={(e) => {setvideoQuality(e.target.value === 'auto' ? null : e.target.value)}}>
+                                <select className="selectFormatStandard" value={videoQuality ?? 'auto'} onChange={(e) => { setvideoQuality(e.target.value === 'auto' ? null : e.target.value) }}>
                                     <option value="auto">Automatico</option>
                                     <option value="480">480p</option>
                                     <option value="720">720p</option>
@@ -131,7 +147,7 @@ const Settings = () => {
                         <div className="selectVideoFormat">
                             <label htmlFor="select" className="label1">Selecione o formato de audio:</label>
                             <div className="select">
-                                <select className="selectFormatStandard" value={audioFormat ?? 'auto'} onChange={(e) => {setaudioFormat(e.target.value === 'auto' ? null : e.target.value)}}>
+                                <select className="selectFormatStandard" value={audioFormat ?? 'auto'} onChange={(e) => { setaudioFormat(e.target.value === 'auto' ? null : e.target.value) }}>
                                     <option value="auto">Automatico</option>
                                     <option value="MP3">MP3</option>
                                     <option value="AAC">AAC</option>
@@ -142,7 +158,7 @@ const Settings = () => {
                         <div className="selectVideoFormat">
                             <label htmlFor="select" className="label1">Selecione a qualidade de audio:</label>
                             <div className="select">
-                                <select className="selectFormatStandard" value={audioQuality ?? 'auto'} onChange={(e) => {setaudioQuality(e.target.value === 'auto' ? null : e.target.value)}}>
+                                <select className="selectFormatStandard" value={audioQuality ?? 'auto'} onChange={(e) => { setaudioQuality(e.target.value === 'auto' ? null : e.target.value) }}>
                                     <option value="auto">Automatico</option>
                                     <option value="128">128 kbps</option>
                                     <option value="192">192 kbps</option>
