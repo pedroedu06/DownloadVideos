@@ -5,6 +5,7 @@ import { open } from '@tauri-apps/plugin-dialog';
 import axios from "axios";
 import { useState, useEffect, useMemo } from "react";
 import { FaFolderOpen } from "react-icons/fa";
+import { ToastContainer, toast } from 'react-toastify';
 
 
 const Settings = () => {
@@ -89,9 +90,35 @@ const Settings = () => {
         setPath(ph === "undefined" ? null : ph)
     }, [])
 
+    const handleDeletCache = () => {
+        localStorage.removeItem("videoFormat")
+        localStorage.removeItem("videoQuality")
+        localStorage.removeItem("audioFormat")
+        localStorage.removeItem("audioQuality")
+        localStorage.removeItem("pathDownloader")
+
+        toast('Cache limpo com sucesso', {
+            position: "top-center",
+            autoClose: 2000,
+            hideProgressBar: false,
+            closeOnClick: false,
+            pauseOnHover: true,
+            draggable: true,
+            progress: undefined,
+            theme: "dark",
+        });
+
+        setPath(null)
+        setaudioFormat(null)
+        setaudioQuality(null)
+        setvideoFormat(null)
+        setvideoQuality(null)
+    }
+
 
     return (
         <div className="mainContainer">
+            <ToastContainer />
             <section className="lateralBar">
                 <div className="backBtn" onClick={handleNav}>
                     <IoChevronBack />
@@ -107,10 +134,10 @@ const Settings = () => {
                             <span style={{ color: '#ffff', marginRight: 10 }}><FaFolderOpen /></span>Selecionar Pasta
                         </button>
                         {path && (
-                                <p className="dirSelected">
-                                    Pasta selecionada:
-                                    <strong className="pathClass">{displayPath}</strong>
-                                </p>
+                            <p className="dirSelected">
+                                Pasta selecionada:
+                                <strong className="pathClass">{displayPath}</strong>
+                            </p>
                         )}
                     </div>
                 </div>
@@ -173,7 +200,7 @@ const Settings = () => {
                     <h3>Manutencao</h3>
                     <div className="row">
                         <span className="LabelBtns">Limpar Cache:</span>
-                        <button className="limparBtn">Limpar</button>
+                        <button className="limparBtn" onClick={handleDeletCache}>Limpar</button>
                     </div>
 
                     <div className="row">

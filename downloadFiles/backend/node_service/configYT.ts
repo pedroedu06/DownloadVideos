@@ -31,7 +31,7 @@ export async function getVideos(): Promise<VideoInfo[]> {
             publishedAt: item.snippet.publishedAt
         }));
     } catch (error) {
-        console.log("log do error", error)
+        console.error("log do error", error)
         throw new Error("erro ao buscar videos");
     }
 }
