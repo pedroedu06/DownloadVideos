@@ -71,12 +71,10 @@ signal.signal(signal.SIGINT, _signal_handler)
 signal.signal(signal.SIGTERM, _signal_handler)
 
 
-def process_job(job_id: str, url: Optional[str]):
-    """Processa um job de download.
+def process_job(job_id: str):
+    user_id = r.get(f"download:{job_id}:user_id")
+    url = r.get(f"download:{job_id}:url")
 
-    Implementa estados claros, retries e DLQ. Usa lock distribuído para evitar
-    processamento concorrente do mesmo job por múltiplos workers.
-    """
     if not url:
         r.set(f"download:{job_id}:status", "error")
         r.set(f"download:{job_id}:error", "url nao encontrada")
@@ -100,6 +98,12 @@ def process_job(job_id: str, url: Optional[str]):
     # marca que estamos processando
     r.set(f"download:{job_id}:status", "downloading")
     r.set(f"download:{job_id}:progress", 0)
+    # inicializar acumuladores de bytes para contar todos os downloads (audio+video/fragments)
+
+    try: 
+        r.sadd(f"user:{user_id}:jobs", job_id)
+    except Exception:
+        pass
 
     def hook(d):
         status = d.get("status")
@@ -107,28 +111,71 @@ def process_job(job_id: str, url: Optional[str]):
         if r.get(cancel_key):
             raise Exception("cancelled by user")
         if status == "downloading":
-            downloaded = d.get('downloaded_bytes', 0)
-            total = (d.get("total_bytes") or d.get('total_bytes_estimate') or 0)
+            downloaded = int(d.get('downloaded_bytes') or 0)
+            total = int(d.get("total_bytes") or d.get('total_bytes_estimate') or 0)
+
+            # acumular bytes: calcular delta em relação ao último valor visto
+            try:
+                last_raw = r.get(f"download:{job_id}:last_downloaded") or 0
+                last = int(last_raw)
+            except Exception:
+                last = 0
+
+            if downloaded >= last:
+                delta = downloaded - last
+            else:
+                # reinício (novo componente/stream), somar o valor atual
+                delta = downloaded
+
+            try:
+                accum_raw = r.get(f"download:{job_id}:bytes_accumulated") or 0
+                accum = int(accum_raw)
+            except Exception:
+                accum = 0
+
+            accum += max(0, delta)
+
+            try:
+                r.incrby(f"user:{user_id}:total_bytes", delta)
+            except Exception:   
+                pass
+            
+            try:
+                 r.incrby("global:total_bytes", delta)
+            except Exception:
+                pass
+
+            try:
+                r.set(f"download:{job_id}:bytes_accumulated", accum)
+                r.set(f"download:{job_id}:last_downloaded", downloaded)
+            except Exception:
+                pass
 
             percent = 0.0
-
             if total > 0:
+                # quando tivermos um total para o componente em andamento, estimamos percent
                 percent = downloaded / total * 100
             else:
                 frag_index = d.get("fragment_index")
                 frag_count = d.get("fragment_count")
-
                 if frag_index and frag_count:
-                    percent = (frag_index / frag_count) * 100
-            
+                    try:
+                        percent = (frag_index / frag_count) * 100
+                    except Exception:
+                        percent = 0.0
+
             r.set(f"download:{job_id}:progress", percent, 2)
             r.set(f"download:{job_id}:status", "downloading")
             _log_structured("progress", {"job_id": job_id, "progress": percent})
 
         elif status == "finished":
-            # quando finalizado, marcamos o processo como finished
-            r.set(f"download:{job_id}:progress", 100)
-            r.set(f"download:{job_id}:status", "processing")
+            # armazenar metadados por job e manter lista de completados
+            try:
+                r.sadd("downloads:completed", job_id)
+                r.sadd(f"job_id:{job_id}:downloads:completed", job_id)
+            except Exception as e:
+                _log_structured("metadata_store_error", {"job_id": job_id, "error": str(e)})
+
             _log_structured("download_finished", {"job_id": job_id})
 
     # aqui determina o tipo de job enviado do usuario
@@ -194,7 +241,7 @@ def process_job(job_id: str, url: Optional[str]):
     # opções base comuns
     ydl_opts = {
         "progress_hooks": [hook],
-        "outtmpl": str(DOWNLOAD_DIR / "%(title)s-%(id)s.%(ext)s"),
+        "outtmpl": str(DOWNLOAD_DIR / "%(title)s_%(format_id)s.%(ext)s"),
         "js-runtimes": ["node"],
     }
 
@@ -223,9 +270,6 @@ def process_job(job_id: str, url: Optional[str]):
         })
 
     try:
-        print("RAW VQ:", raw_vq)
-        print("qualidade video", video_quality)
-        print("formato desejado", fmt_option)
         with YoutubeDL(ydl_opts) as ydl:
             ydl.download([url])
 
@@ -278,7 +322,7 @@ def _main_loop():
             if item:
                 _, job_id = item
                 url = r.get(f"download:{job_id}:url")
-                process_job(job_id, url)
+                process_job(job_id)
         except Exception as e:
             _log_structured("loop_exception", {"error": str(e)})
             time.sleep(1)

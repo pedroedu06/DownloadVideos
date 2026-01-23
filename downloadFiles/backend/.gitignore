@@ -1,6 +1,4 @@
 .env
-.env.production
-.dockerignore
 node_modules
 tsconfig.json
 package.json

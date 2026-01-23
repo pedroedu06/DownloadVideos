@@ -2,7 +2,6 @@ import React from 'react';
 import './VideoGrid.css';
 import CardVideo from './CardVideo';
 import { useEffect, useState } from 'react';
-import axios from 'axios';
 
 type VideoProps = {
     id: string;
@@ -23,15 +22,12 @@ const VideoGrid: React.FC<VideoDonwloadGrid> = ({ onClickDonwload }) => {
     const [videos, setVideos] = useState<VideoProps[]>([]);
     //pega os dados da api do yt
     useEffect(() => {
-        const feedVideos = async () => {
-            try {
-                const res = await axios.get('http://localhost:3000/feed')
-                if (!Array.isArray(res.data)) setVideos(res.data);
-            } catch (err) {
-                console.error('erro ao alocar os dados', err);
-            }
-        }
-        feedVideos();
+        fetch('http://localhost:3000/feed')
+            .then(res => res.json())
+            .then((dataVideos: VideoProps[]) => {
+                if (!Array.isArray(dataVideos)) return;
+                setVideos(dataVideos);
+            })
     }, [])
     
 

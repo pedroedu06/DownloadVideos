@@ -2,7 +2,14 @@ from fastapi import FastAPI, Body, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from uuid import uuid4
 from api.redisClient import redisClient
-from api.schemas import DownloadRequest, DownloadStatus, DownloadDIR
+from api.schemas import DownloadRequest, DownloadStatus, DownloadDIR, DownloadInfo
+from typing import List
+import json
+
+
+
+
+
 
 
 # aqui encapsula os valores de progresso do donwload do redis, assim facilita reutilizar em outros lugares
@@ -40,11 +47,15 @@ def create_download(data: DownloadRequest):
     redisClient.set(f"download:{job_id}:status", "queued")
     redisClient.set(f"download:{job_id}:progress", 0)
     redisClient.set(f"download:{job_id}:url", data.url)
+    redisClient.set(f"download:{job_id}:user_id", data.user_id)
 
     redisClient.expire(f"download:{job_id}:status", 3600)
     redisClient.expire(f"download:{job_id}:progress", 3600)
     redisClient.expire(f"download:{job_id}:url", 3600)
     redisClient.expire(f"download:{job_id}:format", 3600)
+    redisClient.expire(f"download:{job_id}:user_id", 3600)
+
+    redisClient.sadd(f"user:{data.user_id}:jobs", job_id)
 
     redisClient.lpush("queue:downloads", job_id)
 
@@ -91,3 +102,65 @@ def set_download_settings(settings: dict = Body(...)):
             redisClient.set(mapping[k], str(v))
 
     return {"status": "ok"}
+
+
+@app.get('/list_downloads', response_model=List[DownloadInfo])
+def list_downloads():
+    ids = redisClient.smembers('downloads:completed') or []
+    results = []
+    for job_id in ids:
+        raw = redisClient.get(f"download:{job_id}:info")
+        if raw:
+            try:
+                info = json.loads(raw)
+            except Exception:
+                info = {}
+        else:
+            info = {
+                "job_id": job_id,
+                "id": redisClient.get(f"download:{job_id}:id"),
+                "title": redisClient.get(f"download:{job_id}:title"),
+                "filename": None,
+                "path": None,
+                "size": None,
+                "type": redisClient.get(f"download:{job_id}:type"),
+                "created_at": None,
+            }
+        info["job_id"] = job_id
+        results.append(info)
+
+
+    return results
+    
+@app.get('/userDownload/{user_id}/downloads')  
+def list_user_downloads(user_id: str):
+    ids = redisClient.smembers(f"user:{user_id}:downloads:completed") or []
+    resultsUser = []
+
+    for job_id in ids:
+        raw = redisClient.get(f"download:{job_id}:info")
+        if raw:
+            try:
+                info = json.loads(raw)
+            except Exception:
+                info = {}
+        else:
+            info = {}
+         
+        info["job_id"] = job_id
+        resultsUser.append(info)
+    
+    return resultsUser
+
+
+def bytes_to_human(size):
+    try: 
+        size = float(size)
+    except (TypeError, ValueError):
+        return '0 B'    
+
+    for util in ['B', 'KB', 'MB', 'GB', 'TB']:
+        if size < 1024: 
+            return f"{size:.2f} {util}"
+        size /= 1024 
+    return f"{size:.2f} PB"

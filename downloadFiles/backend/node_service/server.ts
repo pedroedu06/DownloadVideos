@@ -28,17 +28,11 @@ app.post('/getInfoVideo', async (req, res) => {
 
         const { url } = req.body;
 
-        console.log("BODY:", req.body);
-        console.log("URL:", url);
         if (!url){
             return res.status(400).json({error:"url nao enviada!"})
         }
 
         const VideoId = extractVideoID(url);
-
-        console.log("VIDEO ID:", VideoId);
-
-
         if (!VideoId) {
             return res.status(400).json({ error: "URL inválida" });
         }

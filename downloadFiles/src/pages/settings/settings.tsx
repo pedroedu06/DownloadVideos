@@ -8,7 +8,9 @@ import { FaFolderOpen } from "react-icons/fa";
 import { ToastContainer, toast } from 'react-toastify';
 
 
+
 const Settings = () => {
+
     const nav = useNavigate();
     const [path, setPath] = useState<string | null>(null);
     const [videoQuality, setvideoQuality] = useState<string | null>(null)
@@ -19,6 +21,7 @@ const Settings = () => {
     const handlesavevideoConfigs = async () => {
         localStorage.setItem("videoFormat", videoFormat ?? "auto")
         localStorage.setItem("videoQuality", videoQuality ?? "auto")
+
         try {
             await axios.post("http://localhost:8000/downloadSettings", {
                 default_video_format: videoFormat,
@@ -32,6 +35,7 @@ const Settings = () => {
     const handlesaveaudioConfigs = async () => {
         localStorage.setItem("audioFormat", audioFormat ?? "auto")
         localStorage.setItem("audioQuality", audioQuality ?? "auto")
+
         try {
             await axios.post("http://localhost:8000/downloadSettings", {
                 default_audio_format: audioFormat,
@@ -62,9 +66,11 @@ const Settings = () => {
         }
     }
 
-
     const handleNav = () => {
-        nav('/home')
+        nav('/')
+    }
+    const handleHistory = () => {
+        nav('/history')
     }
 
     const displayPath = useMemo(() => {
@@ -127,6 +133,11 @@ const Settings = () => {
             </section>
             <section className="mainSection">
                 <h2 className="titleSettings">Configuracoes</h2>
+                <div className="changeBackgroundColor">
+
+
+
+                </div> 
                 <div className="storageConfig">
                     <h3>Armazenamento</h3>
                     <div className="storageCofigContainer">
@@ -200,12 +211,13 @@ const Settings = () => {
                     <h3>Manutencao</h3>
                     <div className="row">
                         <span className="LabelBtns">Limpar Cache:</span>
-                        <button className="limparBtn" onClick={handleDeletCache}>Limpar</button>
+                        <button className="limparBtn" onClick={handleDeletCache}>Limpar cache</button>
                     </div>
 
                     <div className="row">
-                        <span className="LabelBtns">Limpar downloads:</span>
-                        <button className="limparBtn">Limpar</button>
+                        <span className="LabelBtns">Exibir historico de downloads:</span>
+                        <button className="limparBtn" onClick={handleHistory}>Historico</button>
+
                     </div>
                 </div>
             </section>

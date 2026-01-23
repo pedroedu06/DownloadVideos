@@ -9,6 +9,7 @@ import VideoGrid from '../../components/VideoGrid';
 import axios from "axios";
 import CardDownloadprogress from "../../components/CardDownloadprogress";
 import ModalSelectedFormat from "../../components/ModalSelectedFormat";
+import { createUserId } from "../../App";
 
 const home: React.FC = () => {
   //reload na pagina, tipo um f5
@@ -28,8 +29,9 @@ const home: React.FC = () => {
   // aqui confirma o seu donwload e envia para o worker
   const handleConfirmDownload = async (type: string) => {
     setModalOpen(false);
+    console.log(createUserId());
     try {
-      const response = await axios.post('http://localhost:8000/downloadtask', { url: link, type });
+      const response = await axios.post('http://localhost:8000/downloadtask', { url: link, type: type, user_id: createUserId()});
       console.log('Download iniciado:', response.data);
       const jobId = response.data.job_id || response.data.jobId || crypto.randomUUID();
 

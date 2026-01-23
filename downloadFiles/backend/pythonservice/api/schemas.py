@@ -12,3 +12,14 @@ class DownloadStatus(BaseModel):
 
 class DownloadDIR(BaseModel):
     path: str
+
+
+class DownloadInfo(BaseModel):
+    job_id: str
+    id: Optional[str] = None
+    title: Optional[str] = None
+    filename: Optional[str] = None
+    path: Optional[str] = None
+    size: Optional[int] = None
+    type: Optional[str] = None
+    created_at: Optional[str] = None

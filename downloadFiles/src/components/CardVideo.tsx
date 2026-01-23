@@ -21,7 +21,7 @@ const CardVideo: React.FC<VideoConfig> = ({ Video, onClickDownload }) => {
   return (
     <div className="cv-card">
       <img className="cv-thumbnail" src={Video.thumbnail} alt={Video.title} />
-      <div className="cv-title" title={Video.title}>{Video.title}</div>
+      <div className="cv-title">{Video.title}</div>
       <div className="cv-metrics">
         <span className="cv-metric"><BiLike className="cv-icon" /> <span className="cv-number">{Video.likes}</span></span>
         <span className="cv-metric"><FaEye className="cv-icon" /> <span className="cv-number">{Video.views}</span></span>
