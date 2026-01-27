@@ -1,6 +1,13 @@
+.historyContainer {
+    height: 100vh;
+    display: flex;
+    flex-direction: column;
+}
+
 .navbarHistory {
+    height: 50px;
+    flex-shrink: 0;
     border-bottom: 1px solid rgba(255,255,255,0.04);
-    max-width: 100%;
     width: 100vw;
     padding-bottom: 10px;
     padding-top: 10px;
@@ -54,4 +61,31 @@
     box-sizing: border-box;
     margin-right: 10px; 
     margin-left: auto;
+}
+
+.cardHistorico {
+    margin-top: 10px;
+    overflow-y: auto;
+    padding-right: 6px; 
+}
+
+.cardHistorico::-webkit-scrollbar {
+    width: 10px;
+}
+.cardHistorico::-webkit-scrollbar-track {
+    background: transparent;
+}
+.cardHistorico::-webkit-scrollbar-thumb {
+    background: linear-gradient(180deg, rgba(255,255,255,0.06), rgba(255,255,255,0.03));
+    border-radius: 999px;
+    border: 2px solid rgba(0,0,0,0.12);
+}
+.cardHistorico::-webkit-scrollbar-thumb:hover {
+    background: rgba(255,255,255,0.12);
+}
+@supports (scrollbar-width: thin) {
+    .cardHistorico {
+        scrollbar-width: thin;
+        scrollbar-color: rgba(255,255,255,0.06) transparent;
+    }
 }

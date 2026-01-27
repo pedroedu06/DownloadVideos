@@ -5,10 +5,9 @@ import { FaFile } from "react-icons/fa";
 import { IoIosPlay } from "react-icons/io";
 import { MdOutlineDateRange } from "react-icons/md";
 
-
-
 type HistoryProps = {
     id: string;
+    thumb: string;
     title: string;
     path: string;
     size: string;
@@ -17,17 +16,41 @@ type HistoryProps = {
 }
 
 
-const CardHistorico: React.FC<HistoryProps> = ({ id, title, path, size, type, created_at }) => {
+const CardHistorico: React.FC<HistoryProps> = ({ id, thumb, title, path, size, type, created_at }) => {
     return (
         <div className='cardContainer'>
-            <img className="ch-thumbnail" src="" />
-            <div className='ch-title'><span>{title}</span></div>
-            <div className='ch-idyt'>{id}</div>
-            <div className='ch-metrics'>
-                <span className='ch-path'><span style={{ color: "#fff" }}><FaFolderOpen /></span>{path}</span>
-                <span className='ch-path'><span style={{ color: "#fff" }}><FaFile /></span>{size}</span>
-                <span className='ch-type'><span style={{ color: "#fff" }}><IoIosPlay /></span>{type}</span>
-                <span className='ch-date'><span style={{ color: "#fff" }}><MdOutlineDateRange /></span>{created_at}</span>
+            <div className='ch-thumb-container'>
+                <img className="ch-thumbnail" src={thumb} />
+            </div>
+            <div className='ch-container'>
+                <div className='ch-title'>Titulo do video: <span className='contain'>{title}</span></div>
+                <div className='ch-idyt'>Id do youtube do video: <span className='contain'>{id}</span></div>
+
+                <div className='ch-metrics-container'>
+                    <div className="metric metric-path">
+                        <FaFolderOpen />
+                        <span className="label">Path:</span>
+                        <span className="path-txt">{path}</span>
+                    </div>
+
+                    <div className="metric">
+                        <FaFile />
+                        <span className="label">Tamanho:</span>
+                        <span className="value">{size}</span>
+                    </div>
+
+                    <div className="metric">
+                        <IoIosPlay />
+                        <span className="label">Tipo:</span>
+                        <span className="value">{type}</span>
+                    </div>
+
+                    <div className="metric">
+                        <MdOutlineDateRange />
+                        <span className="label">Data:</span>
+                        <span className="value">{created_at}</span>
+                    </div>
+                </div>
             </div>
         </div>
     );

@@ -1,5 +1,5 @@
 import React from "react"
-import CardHistorico from "../componetsHistory/cardHistorico"
+import HistoryGrid from "../componetsHistory/historicoGrid";
 import { IoIosArrowBack } from "react-icons/io";
 import { GoFilter } from "react-icons/go";
 import "./history.css"
@@ -26,8 +26,11 @@ const History: React.FC = () => {
                     <div className="filterHistory"><span><GoFilter />Filtrar</span></div>
                 </div>
             </div>
-            <CardHistorico id="12313" title="peido" path="downloads" size="2131mb" type="seila" created_at="hoje"/>
+            <section className="cardHistorico">
+                <HistoryGrid/>
+            </section>
         </div>
+
     )
 }
 

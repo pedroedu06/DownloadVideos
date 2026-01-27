@@ -151,16 +151,3 @@ def list_user_downloads(user_id: str):
         resultsUser.append(info)
     
     return resultsUser
-
-
-def bytes_to_human(size):
-    try: 
-        size = float(size)
-    except (TypeError, ValueError):
-        return '0 B'    
-
-    for util in ['B', 'KB', 'MB', 'GB', 'TB']:
-        if size < 1024: 
-            return f"{size:.2f} {util}"
-        size /= 1024 
-    return f"{size:.2f} PB"

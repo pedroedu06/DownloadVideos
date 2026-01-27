@@ -3,6 +3,7 @@ from typing import Optional
 
 class DownloadRequest(BaseModel):
     url: str
+    user_id: str
     type: str
 
 class DownloadStatus(BaseModel):

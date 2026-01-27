@@ -114,9 +114,11 @@ def process_job(job_id: str):
             downloaded = int(d.get('downloaded_bytes') or 0)
             total = int(d.get("total_bytes") or d.get('total_bytes_estimate') or 0)
 
-            # acumular bytes: calcular delta em relação ao último valor visto
+            info = d.get("info_dict") or {}
+            stream_id = info.get("format_id") or "unknown"
+
             try:
-                last_raw = r.get(f"download:{job_id}:last_downloaded") or 0
+                last_raw = r.get(f"download:{job_id}:last_downloaded:{stream_id}") or 0
                 last = int(last_raw)
             except Exception:
                 last = 0
@@ -124,7 +126,6 @@ def process_job(job_id: str):
             if downloaded >= last:
                 delta = downloaded - last
             else:
-                # reinício (novo componente/stream), somar o valor atual
                 delta = downloaded
 
             try:
@@ -147,7 +148,7 @@ def process_job(job_id: str):
 
             try:
                 r.set(f"download:{job_id}:bytes_accumulated", accum)
-                r.set(f"download:{job_id}:last_downloaded", downloaded)
+                r.set(f"download:{job_id}:last_downloaded:{stream_id}", downloaded)
             except Exception:
                 pass
 
@@ -169,10 +170,61 @@ def process_job(job_id: str):
             _log_structured("progress", {"job_id": job_id, "progress": percent})
 
         elif status == "finished":
-            # armazenar metadados por job e manter lista de completados
+            r.set(f"download:{job_id}:status", "processing")
+
+            info = d.get("info_dict") or {} 
+            filename = d.get("filename") or info.get("_filename") or None
+
+            filepath = None 
+            filesize = None
+
             try:
+                if filename:
+                    try:
+                        p = Path(filename)
+
+                        if not p.is_absolute():
+                            p = DOWNLOAD_DIR / p
+
+                        filepath = str(p.resolve())
+
+                        try:
+                            filesize = p.stat().st_size
+                        except Exception:
+                            filesize = int(
+                                r.get(f"download:{job_id}:bytes_accumulated") or
+                                info.get("filesize") or
+                                info.get("filesize_approx") or
+                                d.get("total_bytes") or
+                                0
+                            )
+
+                    except Exception:
+                        filepath = filename
+                        filesize = int(
+                            r.get(f"download:{job_id}:bytes_accumulated") or info.get("filesize") or info.get("filesize_approx") or d.get("total_bytes") or 0
+                        )
+
+            except Exception:
+                filesize = (
+                    info.get("filesize") or info.get("filesize_approx") or d.get("total_bytes") or 0
+                ) 
+
+            created_at = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
+
+            metadata = { 
+                "id": info.get("id"), 
+                "title": info.get("title"), 
+                "filename": Path(filename).name if filename else None, 
+                "path": filepath, 
+                "size": int(filesize) if filesize is not None else None, 
+                "type": job_type, "created_at": created_at, 
+            }
+
+            try:
+                r.set(f"download:{job_id}:info", json.dumps(metadata, ensure_ascii=False))
                 r.sadd("downloads:completed", job_id)
-                r.sadd(f"job_id:{job_id}:downloads:completed", job_id)
+                r.sadd(f"user:{user_id}:downloads:completed", job_id)
             except Exception as e:
                 _log_structured("metadata_store_error", {"job_id": job_id, "error": str(e)})
 
