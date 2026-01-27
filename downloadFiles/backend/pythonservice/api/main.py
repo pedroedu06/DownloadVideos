@@ -6,12 +6,6 @@ from api.schemas import DownloadRequest, DownloadStatus, DownloadDIR, DownloadIn
 from typing import List
 import json
 
-
-
-
-
-
-
 # aqui encapsula os valores de progresso do donwload do redis, assim facilita reutilizar em outros lugares
 class ProgressManager:
     def __init__(self, redis_client):

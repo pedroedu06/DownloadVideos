@@ -170,65 +170,9 @@ def process_job(job_id: str):
             _log_structured("progress", {"job_id": job_id, "progress": percent})
 
         elif status == "finished":
+            # Stream finished downloading - yt-dlp will merge if needed
             r.set(f"download:{job_id}:status", "processing")
-
-            info = d.get("info_dict") or {} 
-            filename = d.get("filename") or info.get("_filename") or None
-
-            filepath = None 
-            filesize = None
-
-            try:
-                if filename:
-                    try:
-                        p = Path(filename)
-
-                        if not p.is_absolute():
-                            p = DOWNLOAD_DIR / p
-
-                        filepath = str(p.resolve())
-
-                        try:
-                            filesize = p.stat().st_size
-                        except Exception:
-                            filesize = int(
-                                r.get(f"download:{job_id}:bytes_accumulated") or
-                                info.get("filesize") or
-                                info.get("filesize_approx") or
-                                d.get("total_bytes") or
-                                0
-                            )
-
-                    except Exception:
-                        filepath = filename
-                        filesize = int(
-                            r.get(f"download:{job_id}:bytes_accumulated") or info.get("filesize") or info.get("filesize_approx") or d.get("total_bytes") or 0
-                        )
-
-            except Exception:
-                filesize = (
-                    info.get("filesize") or info.get("filesize_approx") or d.get("total_bytes") or 0
-                ) 
-
-            created_at = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
-
-            metadata = { 
-                "id": info.get("id"), 
-                "title": info.get("title"), 
-                "filename": Path(filename).name if filename else None, 
-                "path": filepath, 
-                "size": int(filesize) if filesize is not None else None, 
-                "type": job_type, "created_at": created_at, 
-            }
-
-            try:
-                r.set(f"download:{job_id}:info", json.dumps(metadata, ensure_ascii=False))
-                r.sadd("downloads:completed", job_id)
-                r.sadd(f"user:{user_id}:downloads:completed", job_id)
-            except Exception as e:
-                _log_structured("metadata_store_error", {"job_id": job_id, "error": str(e)})
-
-            _log_structured("download_finished", {"job_id": job_id})
+            _log_structured("stream_finished", {"job_id": job_id})
 
     # aqui determina o tipo de job enviado do usuario
     job_type = (r.get(f"download:{job_id}:type") or "video").lower()
@@ -323,9 +267,93 @@ def process_job(job_id: str):
 
     try:
         with YoutubeDL(ydl_opts) as ydl:
-            ydl.download([url])
+            info_dict = ydl.extract_info(url, download=True)
 
-        # processamento pós-download (se necessário)
+        # Post-download: collect metadata from the actual final file
+        # This ensures we get the correct size of the merged audio+video file
+        r.set(f"download:{job_id}:status", "processing")
+        
+        # Get the final output filename from yt-dlp
+        final_filename = None
+        filepath = None
+        filesize = None
+        
+        try:
+            # yt-dlp returns info about the downloaded file
+            if info_dict:
+                # Get the actual filename that was saved
+                final_filename = ydl.prepare_filename(info_dict)
+                
+                # Handle the case where post-processors changed the extension
+                # (e.g., audio extraction changes .webm to .mp3)
+                if final_filename:
+                    p = Path(final_filename)
+                    
+                    # Check if file exists, if not try common post-processor extensions
+                    if not p.exists():
+                        # For audio extraction, the extension might have changed
+                        if job_type == "audio" or desired_format in {"mp3", "wav", "aac", "m4a", "opus", "flac"}:
+                            base = p.with_suffix('')
+                            possible_ext = f".{desired_format}"
+                            p = Path(str(base) + possible_ext)
+                        # For video merge, extension might have changed to merge format
+                        elif desired_format:
+                            base = p.with_suffix('')
+                            possible_ext = f".{desired_format}"
+                            p = Path(str(base) + possible_ext)
+                    
+                    if p.exists():
+                        filepath = str(p.resolve())
+                        # Get the ACTUAL file size from disk - this is the merged audio+video size
+                        filesize = p.stat().st_size
+                        _log_structured("file_size_from_disk", {
+                            "job_id": job_id, 
+                            "size": filesize,
+                            "path": filepath
+                        })
+                    else:
+                        _log_structured("file_not_found", {
+                            "job_id": job_id,
+                            "expected_path": str(p)
+                        })
+        except Exception as e:
+            _log_structured("metadata_extraction_error", {"job_id": job_id, "error": str(e)})
+        
+        # Fallback to accumulated bytes if we couldn't get file size from disk
+        if filesize is None:
+            filesize = int(r.get(f"download:{job_id}:bytes_accumulated") or 0)
+            _log_structured("file_size_from_accumulator", {
+                "job_id": job_id,
+                "size": filesize
+            })
+        
+        # Create metadata with accurate information
+        created_at = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
+        
+        metadata = {
+            "id": info_dict.get("id") if info_dict else None,
+            "title": info_dict.get("title") if info_dict else None,
+            "filename": Path(final_filename).name if final_filename else None,
+            "path": filepath,
+            "size": int(filesize) if filesize is not None else None,
+            "type": job_type,
+            "created_at": created_at,
+        }
+        
+        # Save metadata to Redis
+        try:
+            r.set(f"download:{job_id}:info", json.dumps(metadata, ensure_ascii=False))
+            r.sadd("downloads:completed", job_id)
+            r.sadd(f"user:{user_id}:downloads:completed", job_id)
+            _log_structured("metadata_saved", {
+                "job_id": job_id,
+                "size": metadata["size"],
+                "title": metadata["title"]
+            })
+        except Exception as e:
+            _log_structured("metadata_store_error", {"job_id": job_id, "error": str(e)})
+
+        # Mark as complete
         r.set(f"download:{job_id}:status", "done")
         r.set(f"download:{job_id}:progress", 100)
         _log_structured("job_done", {"job_id": job_id})

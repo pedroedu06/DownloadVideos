@@ -61,12 +61,92 @@
     box-sizing: border-box;
     margin-right: 10px; 
     margin-left: auto;
+    transition: all 0.2s ease;
 }
+
+.filterHistory:hover {
+    background: rgba(255, 255, 255, 0.05);
+    border-color: rgba(255, 255, 255, 0.15);
+}
+
+.filterWrapper {
+    position: relative;
+    display: inline-block;
+}
+
+.filterDropdown {
+    position: absolute;
+    top: calc(100% + 8px);
+    right: 0;
+    background: #1f2233;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 6px;
+    min-width: 180px;
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.6);
+    z-index: 1000;
+    overflow: hidden;
+    animation: slideDown 0.15s ease;
+    padding: 6px 0;
+    margin-right: 10px;
+}
+
+@keyframes slideDown {
+    from {
+        opacity: 0;
+        transform: translateY(-8px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+.filterOption {
+    padding: 10px 16px;
+    cursor: pointer;
+    color: rgba(255, 255, 255, 0.85);
+    transition: all 0.15s ease;
+    user-select: none;
+    font-size: 14px;
+    font-weight: 400;
+    position: relative;
+}
+
+.filterOption:hover {
+    background: rgba(255, 255, 255, 0.06);
+    color: rgba(255, 255, 255, 0.95);
+}
+
+.filterOption.active {
+    background: transparent;
+    color: #c7c9e2;
+    font-weight: 500;
+}
+
+.filterOption.active::before {
+    content: '✓';
+    position: absolute;
+    right: 16px;
+    color: #c7c9e2;
+    font-size: 14px;
+}
+
+.filterOption.active:hover {
+    background: rgba(231, 245, 236, 0.06);
+}
+
+.filterDivider {
+    height: 1px;
+    background: rgba(255, 255, 255, 0.06);
+    margin: 6px 0;
+}
+
 
 .cardHistorico {
     margin-top: 10px;
     overflow-y: auto;
     padding-right: 6px; 
+    flex: 1;
 }
 
 .cardHistorico::-webkit-scrollbar {
