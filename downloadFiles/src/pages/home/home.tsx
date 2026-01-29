@@ -11,7 +11,7 @@ import CardDownloadprogress from "../../components/CardDownloadprogress";
 import ModalSelectedFormat from "../../components/ModalSelectedFormat";
 import { createUserId } from "../../App";
 
-const home: React.FC = () => {
+const Home: React.FC = () => {
   //reload na pagina, tipo um f5
   const reload = () => {
     window.location.reload();
@@ -126,8 +126,9 @@ const home: React.FC = () => {
             zIndex: 3,
             height: "46px",
             width: "40px",
-            background: "rgb(56, 58, 75)",
-            border: "none",
+            background: "var(--sidebar-color)",
+            border: "1px solid var(--border-color)",
+            borderRight: "none",
             borderRadius: "16px 0 0 16px",
             display: "flex",
             alignItems: "center",
@@ -141,7 +142,7 @@ const home: React.FC = () => {
             className="arrow"
             style={{
               fontSize: 35,
-              color: "#fff",
+              color: "var(--text-color)",
               transition: "transform 0.3s cubic-bezier(.4,0,.2,1)",
               transform: open ? "rotate(180deg)" : "rotate(0deg)",
               userSelect: "none",
@@ -155,4 +156,4 @@ const home: React.FC = () => {
   )
 }
 
-export default home;
+export default Home;

@@ -2,24 +2,25 @@
 .searchbar-configbtns {
 	display: flex;
 	height: 40px;
-	border-bottom: 1px solid rgb(56, 58, 75);
+	border-bottom: 1px solid var(--border-color);
 	margin-top: 4px;
 	width: 100%;
 }
 
 .search-bar {
-	border: none;
+	border: 1px solid var(--border-color);
 	padding: 5px;
 	width: 430px;
 	height: 32px;
-  
 	margin-right: 0;
-	border-radius: 0;
+	border-radius: 4px 0 0 4px;
+    background-color: var(--background-color);
+    color: var(--text-color);
 }
 
 .search-bar:focus {
 	outline: none;
-	outline-color: black;
+	border-color: var(--text-color);
 }
 
 .search-bar-container label {
@@ -34,8 +35,9 @@
 }
 
 .download-btn {
-	border: none;
-	background: #fff;
+	border: 1px solid var(--border-color);
+	background-color: var(--sidebar-color);
+    color: var(--text-color);
 	height: 32px;
 	width: 38px;
 	font-size: 20px;
@@ -45,7 +47,6 @@
 	margin-left: 0;
 	border-radius: 0 4px 4px 0;
 	cursor: pointer;
-	border-left: 1px solid #ccc;
 	padding: 0;
 }
 
@@ -67,10 +68,12 @@
 	height: 32px;
 	width: 38px;
 	font-size: 22px;
-	color: rgb(56, 58, 75);
-	background-color: #fff;
+	color: var(--text-color);
+	background-color: var(--sidebar-color);
 	cursor: pointer;
 	margin-right: 30px;
+    border: 1px solid var(--border-color);
+    border-radius: 4px;
 }
 
 .updatepage-btn {
@@ -80,10 +83,12 @@
 	height: 32px;
 	width: 38px;
 	font-size: 19px;
-	color: rgb(56, 58, 75);
-	background-color: #fff;
+	color: var(--text-color);
+	background-color: var(--sidebar-color);
 	cursor: pointer;
 	margin-right: 10px;
+    border: 1px solid var(--border-color);
+    border-radius: 4px;
 }
 
 .sidebar-animated-outer {
@@ -117,9 +122,6 @@
 	height: 550px;
 }
 
-/* Evita que o wrapper da sidebar (que ocupa 100% da área) bloqueie
-	 a interação com o grid abaixo. Habilita eventos apenas nos filhos que
-	 precisam receber cliques. */
 .side-bar {
 	pointer-events: none;
 }
@@ -130,7 +132,7 @@
 
 .sidebar-container {
 	margin-top: 12px;
-	background-color: rgb(56, 58, 75);
+	background-color: var(--sidebar-color);
 	width: 330px;
 	height: 550px;
 	margin-left: auto;
@@ -141,11 +143,12 @@
 	transition: transform 0.35s cubic-bezier(.4,0,.2,1);
 	position: relative;
 	z-index: 2;
+    border: 1px solid var(--border-color);
 }
 
 .sidebar-backdrop {
 	position: fixed;
-	top: 27px; 
+	top: 28px; 
 	left: 0;
 	right: 0;
 	bottom: 0;
@@ -154,4 +157,3 @@
 	pointer-events: auto;
 	transition: opacity 200ms ease;
 }
-

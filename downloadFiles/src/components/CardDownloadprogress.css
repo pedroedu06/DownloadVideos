@@ -1,12 +1,12 @@
 .cv-card-progress {
-    color: #ffffff;
+    color: var(--text-color);
     align-items: center;
     justify-content: center;
     display: flex;
     padding: 8px;
 }
 .cv-card-progress-container {
-    background-color: #1f2937;
+    background-color: var(--sidebar-color);
     width: 280px;
     border-radius: 10px;
     padding: 12px;
@@ -14,16 +14,12 @@
     display: flex;
     flex-direction: column;
     gap: 10px;
-}
-
-.cv-close-container {
-    display: flex;
-    justify-content: flex-end;
+    border: 1px solid var(--border-color);
 }
 
 .cv-close-item {
-    background: rgba(255,255,255,0.06);
-    color: #fff;
+    background: var(--hover-color);
+    color: var(--text-color);
     width: 30px;
     height: 30px;
     border-radius: 8px;
@@ -34,65 +30,25 @@
     cursor: pointer;
 }
 
-.cv-video-info-container{
-    display:flex;
-    gap:10px;
-    align-items:center;
-}
-
 .cv-video-status-progress {
     font-size: 15px;
-    color: #ddd;
-    margin: 0;
-}
-
-.cv-video-thumbnail{
-    width:72px;
-    height:72px;
-    object-fit:cover;
-    border-radius:6px;
-    background: #111827;
-}
-
-.cv-video-meta{
-    flex:1;
-    display:flex;
-    flex-direction:column;
-    gap:6px;
-}
-
-.cv-video-title{
-    font-size:14px;
-    margin:0;
-    line-height:1.2;
-    font-weight:600;
-}
-
-.cv-progressbar-container{
-    margin-top:8px;
-    display:flex;
-    align-items:center;
-    gap:8px;
+    color: var(--text-color);
+    opacity: 0.8;
 }
 
 .cv-progressbar-bg{
     flex:1;
     height:10px;
-    background: rgba(255,255,255,0.06);
+    background: var(--background-color);
     border-radius:6px;
     overflow:hidden;
     position:relative;
+    border: 1px solid var(--border-color);
 }
 
 .cv-progressbar-fill{
     height:100%;
     width:0%;
     transition: width 300ms ease;
-}
-
-.cv-progress-label{
-    min-width:36px;
-    text-align:right;
-    font-size:12px;
-    color: #e5e7eb;
+    background: #3b82f6;
 }

@@ -2,124 +2,98 @@
     height: 100vh;
     display: flex;
     flex-direction: column;
+    background-color: var(--background-color);
+    color: var(--text-color);
 }
 
 .navbarHistory {
     height: 50px;
     flex-shrink: 0;
-    border-bottom: 1px solid rgba(255,255,255,0.04);
+    border-bottom: 1px solid var(--border-color);
     width: 100vw;
     padding-bottom: 10px;
     padding-top: 10px;
-    display: grid;
-    grid-template-columns: 1fr auto 1fr;
+    display: flex;
+    justify-content: space-between;
     align-items: center;
-}
-
-.navbarHistory .left {
-    justify-self: left;
-}
-
-.navbarHistory .right {
-    justify-self: right;
+    box-sizing: border-box;
+    position: relative;
 }
 
 .navbarHistory h3 {
-    justify-self: center;
+    position: absolute;
+    left: 50%;
+    transform: translateX(-50%);
     margin: 0;
-    font-weight: 600;
+}
+
+.navbarHistory .left,
+.navbarHistory .right {
+    display: flex;
+    align-items: center;
+    padding: 0 10px;
 }
 
 .backBtnHistory {
     display: inline-flex;
     align-items: center;
     gap: 8px;
-    padding: 8px 10px;
-    border: 1px solid var(--border);
-    border-radius: 8px;
-    background: transparent;
-    color: var(--text);
+    padding: 10px;
+    border: 1px solid var(--border-color);
+    border-radius: 5px;
+    background-color: var(--sidebar-color);
+    color: var(--text-color);
     cursor: pointer;
     user-select: none;
     width: 100px;
     box-sizing: border-box;
-    margin-left: 10px; 
+    font-family: inherit;
+    font-size: 14px;
 }
 
 .filterHistory {
     display: inline-flex;
     align-items: center;
     gap: 8px;
-    padding: 8px 10px;
-    border: 1px solid var(--border);
-    border-radius: 8px;
-    background: transparent;
-    color: var(--text);
+    padding: 10px;
+    border: 1px solid var(--border-color);
+    border-radius: 5px;
+    background-color: var(--sidebar-color);
+    color: var(--text-color);
     cursor: pointer;
     user-select: none;
     width: 100px;
     box-sizing: border-box;
-    margin-right: 10px; 
-    margin-left: auto;
-    transition: all 0.2s ease;
-}
-
-.filterHistory:hover {
-    background: rgba(255, 255, 255, 0.05);
-    border-color: rgba(255, 255, 255, 0.15);
-}
-
-.filterWrapper {
-    position: relative;
-    display: inline-block;
+    font-family: inherit;
+    font-size: 14px;
 }
 
 .filterDropdown {
     position: absolute;
     top: calc(100% + 8px);
     right: 0;
-    background: #1f2233;
-    border: 1px solid rgba(255, 255, 255, 0.1);
+    background: var(--sidebar-color);
+    border: 1px solid var(--border-color);
     border-radius: 6px;
     min-width: 180px;
     box-shadow: 0 4px 16px rgba(0, 0, 0, 0.6);
     z-index: 1000;
-    overflow: hidden;
-    animation: slideDown 0.15s ease;
-    padding: 6px 0;
-    margin-right: 10px;
-}
-
-@keyframes slideDown {
-    from {
-        opacity: 0;
-        transform: translateY(-8px);
-    }
-    to {
-        opacity: 1;
-        transform: translateY(0);
-    }
 }
 
 .filterOption {
     padding: 10px 16px;
     cursor: pointer;
-    color: rgba(255, 255, 255, 0.85);
-    transition: all 0.15s ease;
-    user-select: none;
+    color: var(--text-color);
     font-size: 14px;
-    font-weight: 400;
-    position: relative;
 }
 
 .filterOption:hover {
-    background: rgba(255, 255, 255, 0.06);
-    color: rgba(255, 255, 255, 0.95);
+    background: var(--hover-color);
 }
 
 .filterOption.active {
     background: transparent;
-    color: #c7c9e2;
+    color: var(--text-color);
     font-weight: 500;
 }
 
@@ -127,45 +101,37 @@
     content: '✓';
     position: absolute;
     right: 16px;
-    color: #c7c9e2;
+    color: var(--text-color);
     font-size: 14px;
 }
-
-.filterOption.active:hover {
-    background: rgba(231, 245, 236, 0.06);
-}
-
-.filterDivider {
-    height: 1px;
-    background: rgba(255, 255, 255, 0.06);
-    margin: 6px 0;
-}
-
 
 .cardHistorico {
     margin-top: 10px;
     overflow-y: auto;
-    padding-right: 6px; 
     flex: 1;
 }
 
 .cardHistorico::-webkit-scrollbar {
     width: 10px;
 }
+
 .cardHistorico::-webkit-scrollbar-track {
     background: transparent;
 }
+
 .cardHistorico::-webkit-scrollbar-thumb {
-    background: linear-gradient(180deg, rgba(255,255,255,0.06), rgba(255,255,255,0.03));
-    border-radius: 999px;
-    border: 2px solid rgba(0,0,0,0.12);
+    background: var(--border-color);
+    border-radius: 6px;
 }
+
 .cardHistorico::-webkit-scrollbar-thumb:hover {
-    background: rgba(255,255,255,0.12);
+    background: var(--text-color);
+    opacity: 0.3;
 }
+
 @supports (scrollbar-width: thin) {
     .cardHistorico {
         scrollbar-width: thin;
-        scrollbar-color: rgba(255,255,255,0.06) transparent;
+        scrollbar-color: var(--border-color) transparent;
     }
 }

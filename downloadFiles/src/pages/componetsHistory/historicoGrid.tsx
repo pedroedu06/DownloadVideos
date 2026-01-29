@@ -127,7 +127,8 @@ const HistoryGrid: React.FC<HistoryGridProps> = ({ filter = 'recent' }) => {
                 <div style={{ 
                     textAlign: 'center', 
                     padding: '40px 20px', 
-                    color: 'rgba(255, 255, 255, 0.5)',
+                    color: 'var(--text-color)',
+                    opacity: 0.5,
                     fontSize: '14px'
                 }}>
                     Nenhum download encontrado para este filtro

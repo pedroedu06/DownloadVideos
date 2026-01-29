@@ -1,33 +1,26 @@
-:root{
-    --bg: #222532;
-    --sidebar: rgb(43, 45, 59);
-    --text: #ffffff;
-    --muted: #bfc6cc;
-    --border: rgba(255,255,255,0.12);
-    --header-height: 28px; /* altura da faixa superior que não deve ser coberta */
+:root {
+    --header-height: 28px;
 }
 
-.mainContainer{
+.mainContainer {
     display: flex;
-    align-items: flex-start; /* garante alinhamento no topo */
+    align-items: flex-start;
     min-height: 100vh;
-    background: var(--bg);
-    color: var(--text);
-    font-family: Inter, Roboto, sans-serif;
+    background: var(--background-color);
+    color: var(--text-color);
+    transition: background 0.3s ease, color 0.3s ease;
 }
 
-/* barra lateral (linha azul) */
-.lateralBar{
+.lateralBar {
     width: 200px;
-    /* barra lateral fixa ocupando toda a altura disponível abaixo do header */
     position: fixed;
-    top: var(--header-height); /* não invade a faixa superior */
-    height: calc(100vh - var(--header-height));
+    top: 37px;
+    height: calc(100vh - 37px);
     padding: 10px 12px;
     box-sizing: border-box;
-    background: var(--sidebar);
-    border-right: 1px solid rgba(255,255,255,0.04);
-    box-shadow: 1px 3px 1px rgba(0,0,0,0.3);
+    background: var(--sidebar-color);
+    border-right: 1px solid var(--border-color);
+    box-shadow: 1px 3px 1px rgba(0, 0, 0, 0.3);
     display: flex;
     flex-direction: column;
     gap: 12px;
@@ -35,156 +28,106 @@
     z-index: 20;
 }
 
-/* botão Voltar com borda (área amarela) */
-.backBtn{
+.backBtn {
     display: inline-flex;
     align-items: center;
     gap: 8px;
-    padding: 8px 10px;
-    border: 1px solid var(--border);
-    border-radius: 8px;
-    background: transparent;
-    color: var(--text);
+    padding: 10px;
+    border: 1px solid var(--border-color);
+    border-radius: 5px;
+    background-color: var(--sidebar-color);
+    color: var(--text-color);
     cursor: pointer;
     user-select: none;
     width: 100%;
     box-sizing: border-box;
+    font-family: inherit;
 }
 
-.backBtn svg{
-    font-size: 18px;
-    line-height: 1;
-}
-
-/* área principal à direita da barra (onde ficará "Configurações") */
-.mainSection{
-    /* reserva espaço à direita da barra fixa */
+.mainSection {
     margin-left: 200px;
-    /* garantir que o conteúdo principal comece abaixo da faixa superior */
-    padding: calc(var(--header-height) + 8px) 28px 16px 28px;
+    padding: calc(37px + 8px) 28px 16px 28px;
     box-sizing: border-box;
-    /* fixa a altura disponível para a área principal e permite scroll interno */
-    height: calc(100vh - var(--header-height));
-    /* ocupa todo o espaço restante à direita da lateral fixa */
+    height: calc(100vh - 37px);
     width: calc(100% - 200px);
     display: flex;
     flex-direction: column;
-    justify-content: flex-start; /* garante que o conteúdo comece no topo */
+    justify-content: flex-start;
     overflow-y: auto;
     overflow-x: hidden;
 }
 
-/* Estilização leve da barra de rolagem apenas nesta página */
-.mainSection::-webkit-scrollbar {
-    width: 10px;
-}
-.mainSection::-webkit-scrollbar-track {
-    background: transparent;
-}
-.mainSection::-webkit-scrollbar-thumb {
-    background: linear-gradient(180deg, rgba(255,255,255,0.06), rgba(255,255,255,0.03));
-    border-radius: 999px;
-    border: 2px solid rgba(0,0,0,0.12);
-}
-.mainSection::-webkit-scrollbar-thumb:hover {
-    background: rgba(255,255,255,0.12);
-}
-@supports (scrollbar-width: thin) {
-    .mainSection {
-        scrollbar-width: thin;
-        scrollbar-color: rgba(255,255,255,0.06) transparent;
-    }
-}
-
-/* cabeçalho da página */
-.titleSettings{
+.titleSettings {
     margin: 0;
     padding-top: 0px;
     font-size: 34px;
     font-weight: 700;
-    color: var(--text);
-}
-
-/* Faz com que o título fique visualmente alinhado com a parte superior da lateral */
-.mainSection > .titleSettings{
-    align-self: flex-start;
-}
-
-@media (max-width: 800px){
-    .lateralBar{ width: 72px; padding: 12px; }
-    .titleSettings{ font-size: 24px; }
 }
 
 .videoFormatsSelect {
     margin-top: 30px;
     margin-bottom: 10px;
-    border-bottom: 0.5px solid rgba(255, 255, 255, 0.3);
+    border-bottom: 0.5px solid var(--border-color);
     display: flex;
     gap: 80px;
     padding-bottom: 40px;
-    position: relative; 
-    align-items: center; 
-}
-
-.selectVideoFormat {
-    display: flex;
-    flex-direction: column;
-    margin-top: 0; 
+    position: relative;
+    align-items: center;
 }
 
 .selectFormatStandard {
     padding: 10px;
     width: 150px;
-    background-color: #262936e0;
-    color: white;
-    border-radius: 10px;
-    margin-right: 100px;
-}
-
-.select {
-    display: flex;
-    align-items: center;
-    gap: 24px; 
-}
-
-
-.saveBtn {
-    padding: 8px;
-    width: 100px;
-    color: #fff;
+    background-color: var(--sidebar-color);
+    color: var(--text-color);
+    border: 1px solid var(--border-color);
     border-radius: 10px;
     cursor: pointer;
-    background: linear-gradient(
-    135deg,
-    #262c3c,
-    #2c3246
-  );
 }
 
+.selectVideoFormat {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    min-width: 250px; /* Largura fixa para alinhar as colunas verticalmente */
+}
 
-.videoFormatsSelect .saveBtn:first-of-type {
+.selectVideoFormat label {
+    font-size: 14px;
+    font-weight: 500;
+    opacity: 0.8;
+}
+
+.saveBtn {
+    padding: 10px;
+    width: 100px;
+    background-color: var(--sidebar-color);
+    color: var(--text-color);
+    border: 1px solid var(--border-color);
+    border-radius: 5px;
+    cursor: pointer;
+    font-family: inherit;
+    font-size: 14px; /* Adicionando para garantir consistência */
+}
+
+.videoFormatsSelect .saveBtn {
     position: absolute;
     right: 40px;
     top: 50%;
     transform: translateY(-50%);
-    margin-top: 0;
-    z-index: 10;
 }
-
-@media (max-width: 800px){
-    .videoFormatsSelect .saveBtn:first-of-type{ position: static; transform: none; margin-top: 12px; width: 100px; }
-}
-
- 
 
 .limparBtn {
     margin-top: 20px;
     padding: 10px;
     width: 120px;
-    background-color: #222532;
-    color: #fff;
+    background-color: var(--sidebar-color);
+    color: var(--text-color);
+    border: 1px solid var(--border-color);
     border-radius: 5px;
     cursor: pointer;
+    font-family: inherit;
+    font-size: 14px;
 }
 
 .row {
@@ -194,48 +137,83 @@
     padding: 10px 0;
 }
 
-.LabelBtns {
-    margin-right: 50px;
-}
-
-.selectVideoFormat label{ margin-bottom: 8px; display: block; color: var(--muted); }
-.selectVideoFormat .select { align-items: center; }
-
 .storageConfig {
-    border-top: 0.5px solid rgba(255, 255, 255, 0.3);
+    border-top: 0.5px solid var(--border-color);
     padding-top: 10px;
     padding-bottom: 60px;
-    border-bottom: 0.5px solid rgba(255, 255, 255, 0.3);
-}
-
-.storageConfig h3 {
-    margin-bottom: 60px;
-}
-
-.storageCofigContainer {
-    display: flex;
-    align-items: center;
+    border-bottom: 0.5px solid var(--border-color);
 }
 
 .armazenamentoBtn {
     padding: 10px;
-    border-radius: 10px;
-    background-color: #222532;
-    color: #fff;
+    background-color: var(--sidebar-color);
+    color: var(--text-color);
+    border: 1px solid var(--border-color);
+    border-radius: 5px;
+    cursor: pointer;
+    font-family: inherit;
 }
 
 .dirSelected {
     font-size: 15px;
     margin-left: 70px;
-    border-style: dotted;
+    border: 1px dotted var(--border-color);
     border-radius: 10px;
     padding: 30px;
 }
 
-.pathClass {
-    margin-left: 10px;
+.changeTheme {
+    display: flex;
+    gap: 0;
+    margin-top: 20px;
+    background-color: var(--border-color);
+    padding: 4px;
+    border-radius: 8px;
+    width: fit-content;
 }
 
-.dwlView {
-    margin-top: 23px;
+.changeTheme .light,
+.changeTheme .dark,
+.changeTheme .midnight {
+    padding: 10px 24px;
+    background-color: transparent;
+    color: var(--text-color);
+    border: none;
+    cursor: pointer;
+    font-size: 14px;
+    font-weight: 500;
+    transition: all 0.3s ease;
+    border-radius: 6px;
+}
+
+.changeTheme div.active {
+    background-color: var(--background-color);
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+}
+
+.changeBackgroundColor {
+    border-top: 0.5px solid var(--border-color);
+    padding-top: 40px;
+    padding-bottom: 40px;
+}
+
+.mainSection::-webkit-scrollbar {
+    width: 10px;
+}
+.mainSection::-webkit-scrollbar-track {
+    background: transparent;
+}
+.mainSection::-webkit-scrollbar-thumb {
+    background: var(--border-color);
+    border-radius: 6px;
+}
+.mainSection::-webkit-scrollbar-thumb:hover {
+    background: var(--text-color);
+    opacity: 0.3;
+}
+@supports (scrollbar-width: thin) {
+    .mainSection {
+        scrollbar-width: thin;
+        scrollbar-color: var(--border-color) transparent;
+    }
 }

@@ -1,14 +1,29 @@
 /* Regras globais e de layout compartilhadas pela aplicação */
-#root {
-  margin: 0;
-  padding: 0;
-  box-sizing: border-box;
+:root, [data-theme='dark'] {
+  --background-color: rgb(37, 39, 56);
+  --sidebar-color: rgb(56, 58, 75);
+  --text-color: #fff;
+  --border-color: #35353f;
+  --btn-color: #fff;
+  --hover-color: rgba(56, 58, 75, 0.918);
+}
 
-  font-family: 'Roboto', sans-serif;
-  font-size: large;
-  background-color: rgb(37, 39, 56);
-  color: white;
-  overflow: hidden;
+[data-theme='light'] {
+--background-color: #F4F6FA;
+--sidebar-color: #E9EDF3;
+--text-color: #303846;
+--border-color: #C6CCD8;
+--btn-color: #F8FAFC;
+--hover-color: #DEE3EB;   
+}
+
+[data-theme='midnight'] {
+  --background-color: #020617;
+  --sidebar-color: #0f172a;
+  --text-color: #f8fafc;
+  --border-color: #1e293b;
+  --btn-color: #f8fafc;
+  --hover-color: #1e293b;
 }
 
 html, body, #root, .mainContainer {
@@ -18,7 +33,11 @@ html, body, #root, .mainContainer {
   width: 100vw;
   height: 100vh;
   overflow: hidden;
-  background: rgb(37, 39, 56);
+  font-family: 'Roboto', sans-serif;
+  font-size: medium;
+  background-color: var(--background-color);
+  color: var(--text-color);
+  transition: background-color 0.3s ease, color 0.3s ease;
 }
 
 .mainContainer {
@@ -42,26 +61,28 @@ html, body, #root, .mainContainer {
 .titlebar {
   height: 37px;
   width: 100%;
-  border-bottom: 1.8px solid #383a4b;
+  border-bottom: 1.8px solid var(--border-color);
   -webkit-app-region: drag;
+  background-color: var(--background-color);
 }
 
 .close-bar {
   height: 100%;
   width: 50px;
   float: right;
-  background-color: rgb(37, 39, 56);
+  background-color: var(--background-color);
   border: none;
-  border-left: 1px solid rgb(56, 58, 75);
-  border-right: 1px solid rgb(56, 58, 75);
+  border-left: 1px solid var(--border-color);
+  border-right: 1px solid var(--border-color);
   transition: 0.2s;
   cursor: pointer;
-  color: rgba(255, 255, 255, 0.856);
+  color: var(--text-color);
   -webkit-app-region: no-drag;
 }
 
 .close-bar:hover {
-  background-color: rgba(56, 58, 75, 0.918);
+  background-color: #ef4444;
+  color: #fff;
 }
 
 .minimize-bar {
@@ -69,15 +90,15 @@ html, body, #root, .mainContainer {
   height: 100%;
   width: 50px;
   float: right;
-  background-color: rgb(37, 39, 56);
+  background-color: var(--background-color);
   border: none;
-  border-left: 1px solid rgb(56, 58, 75);
+  border-left: 1px solid var(--border-color);
   transition: 0.2s;
   cursor: pointer;
-  color: rgba(255, 255, 255, 0.856);
+  color: var(--text-color);
   -webkit-app-region: no-drag;
 }
 
 .minimize-bar:hover {
-  background-color: rgba(56, 58, 75, 0.918);
+  background-color: var(--hover-color);
 }

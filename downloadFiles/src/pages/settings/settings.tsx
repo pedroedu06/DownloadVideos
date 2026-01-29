@@ -6,11 +6,12 @@ import axios from "axios";
 import { useState, useEffect, useMemo } from "react";
 import { FaFolderOpen } from "react-icons/fa";
 import { ToastContainer, toast } from 'react-toastify';
+import { useTheme } from "../../contexts/ThemeContext";
 
 
 
 const Settings = () => {
-
+    const { theme, setTheme } = useTheme();
     const nav = useNavigate();
     const [path, setPath] = useState<string | null>(null);
     const [videoQuality, setvideoQuality] = useState<string | null>(null)
@@ -134,9 +135,12 @@ const Settings = () => {
             <section className="mainSection">
                 <h2 className="titleSettings">Configuracoes</h2>
                 <div className="changeBackgroundColor">
-
-
-
+                    <h4>Trocar Thema</h4>
+                    <div className="changeTheme">
+                        <div className={`light ${theme === 'light' ? 'active' : ''}`} onClick={() => setTheme('light')}>Claro</div>
+                        <div className={`dark ${theme === 'dark' ? 'active' : ''}`} onClick={() => setTheme('dark')}>Escuro</div>
+                        <div className={`midnight ${theme === 'midnight' ? 'active' : ''}`} onClick={() => setTheme('midnight')}>Midnight</div>
+                    </div>
                 </div> 
                 <div className="storageConfig">
                     <h3>Armazenamento</h3>
