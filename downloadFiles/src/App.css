@@ -3,7 +3,7 @@
   --background-color: rgb(37, 39, 56);
   --sidebar-color: rgb(56, 58, 75);
   --text-color: #fff;
-  --border-color: #31313a;
+  --border-color: #35353f;
   --btn-color: #fff;
   --hover-color: rgba(56, 58, 75, 0.918);
 }
@@ -13,7 +13,7 @@
 --sidebar-color: #E9EDF3;
 --text-color: #303846;
 --border-color: #C6CCD8;
---btn-color: #303846;
+--btn-color: #fff;
 --hover-color: #DEE3EB;   
 }
 
@@ -26,7 +26,7 @@
   --hover-color: #1e293b;
 }
 
-html, body, #root, .mainContainer {
+html, body, #root, .app-shell {
   margin: 0;
   padding: 0;
   box-sizing: border-box;
@@ -40,7 +40,7 @@ html, body, #root, .mainContainer {
   transition: background-color 0.3s ease, color 0.3s ease;
 }
 
-.mainContainer {
+.app-shell {
   position: relative;
   width: 100vw;
   height: 100vh;

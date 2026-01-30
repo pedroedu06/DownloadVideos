@@ -163,14 +163,18 @@ const Settings = () => {
     };
 
     return (
-        <div className="mainContainer">
-            <section className="lateralBar">
-                <div className="backBtnContainer">
+        <div className="settings-layout">
+            <div className="navbarSettings">
+                <div className="left">
                     <div className="backBtn" onClick={handleNav}>
                         <IoChevronBack />
                         <span>Voltar</span>
                     </div>
                 </div>
+                <h3>Configurações</h3>
+                <div className="right"></div>
+            </div>
+            <section className="lateralBar">
                 <div className="rowBar" onClick={() => scrollToSection('section-tema')}>Tema</div>
                 <div className="rowBar" onClick={() => scrollToSection('section-armazenamento')}>Armazenamento</div>
                 <div className="rowBar" onClick={() => scrollToSection('section-video')}>Vídeo</div>
@@ -178,7 +182,6 @@ const Settings = () => {
                 <div className="rowBar" onClick={() => scrollToSection('section-manutencao')}>Manutenção</div>
             </section>
             <section className="mainSection">
-                <h2 className="titleSettings">Configurações</h2>
                 <div id="section-tema" className="changeBackgroundColor">
                     <h4>Trocar Tema</h4>
                     <div className="changeTheme">

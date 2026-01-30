@@ -1,10 +1,22 @@
+.home-layout {
+    display: flex;
+    flex-direction: column;
+    height: calc(100vh - 37px);
+    width: 100%;
+    background-color: var(--background-color);
+    color: var(--text-color);
+}
 
 .searchbar-configbtns {
-	display: flex;
-	height: 40px;
-	border-bottom: 1px solid var(--border-color);
-	margin-top: 4px;
-	width: 100%;
+    display: flex;
+    height: 60px;
+    border: 1px solid var(--border-color);
+    margin: 15px 30px; /* Isso afasta a SECTION das bordas do app */
+    border-radius: 12px;
+    align-items: center;
+    padding: 0 30px;
+    box-sizing: border-box;
+    background-color: var(--sidebar-color); /* Dá um leve destaque do fundo */
 }
 
 .search-bar {
@@ -29,7 +41,7 @@
 }
 
 .search-bar-container {
-	margin-left: 120px;
+	margin-left: 90px;
 	display: flex;
 	align-items: center;
 }

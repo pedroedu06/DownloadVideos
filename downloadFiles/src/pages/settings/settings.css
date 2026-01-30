@@ -2,25 +2,53 @@
     --header-height: 28px;
 }
 
-.mainContainer {
+.settings-layout {
     display: flex;
-    align-items: flex-start;
-    min-height: 100vh;
+    flex-direction: column;
+    height: calc(100vh - 37px);
     background: var(--background-color);
     color: var(--text-color);
     transition: background 0.3s ease, color 0.3s ease;
+    overflow: hidden;
+}
+
+.navbarSettings {
+    height: 60px;
+    flex-shrink: 0;
+    border-bottom: 1px solid var(--border-color);
+    width: 100%;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    box-sizing: border-box;
+    position: relative;
+    padding: 0 20px;
+}
+
+.navbarSettings h3 {
+    position: absolute;
+    left: 50%;
+    transform: translateX(-50%);
+    margin: 0;
+    font-size: 1.17em;
+    font-weight: bold;
+}
+
+.navbarSettings .left,
+.navbarSettings .right {
+    display: flex;
+    align-items: center;
 }
 
 .lateralBar {
     width: 200px;
     position: fixed;
-    top: 37px;
-    height: calc(100vh - 37px);
+    top: calc(37px + 60px);
+    height: calc(100vh - 37px - 60px);
     padding: 10px 12px;
     box-sizing: border-box;
-    background: var(--sidebar-color);
+    background: var(--background-color);
     border-right: 1px solid var(--border-color);
-    box-shadow: 1px 3px 1px rgba(0, 0, 0, 0.3);
     display: flex;
     flex-direction: column;
     gap: 12px;
@@ -44,9 +72,10 @@
     color: var(--text-color);
     cursor: pointer;
     user-select: none;
-    width: 100%;
+    width: 100px;
     box-sizing: border-box;
     font-family: inherit;
+    font-size: 14px;
 }
 
 .rowBar {
@@ -86,9 +115,9 @@
 
 .mainSection {
     margin-left: 200px;
-    padding: calc(37px + 8px) 28px 16px 28px;
+    padding: 20px 28px;
     box-sizing: border-box;
-    height: calc(100vh - 37px);
+    height: 100%;
     width: calc(100% - 200px);
     display: flex;
     flex-direction: column;
@@ -234,8 +263,6 @@
 }
 
 .changeBackgroundColor {
-    border-top: 0.5px solid var(--border-color);
-    padding-top: 40px;
     padding-bottom: 40px;
 }
 

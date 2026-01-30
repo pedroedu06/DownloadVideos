@@ -1,5 +1,5 @@
 .historyContainer {
-    height: 100vh;
+    height: calc(100vh - 37px);
     display: flex;
     flex-direction: column;
     background-color: var(--background-color);
@@ -7,17 +7,17 @@
 }
 
 .navbarHistory {
-    height: 50px;
+    height: 60px;
+    /* Slightly taller to look premium as in image */
     flex-shrink: 0;
     border-bottom: 1px solid var(--border-color);
-    width: 100vw;
-    padding-bottom: 10px;
-    padding-top: 10px;
+    width: 100%;
     display: flex;
     justify-content: space-between;
     align-items: center;
     box-sizing: border-box;
     position: relative;
+    padding: 0 20px;
 }
 
 .navbarHistory h3 {

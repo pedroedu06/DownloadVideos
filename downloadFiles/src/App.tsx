@@ -37,7 +37,7 @@ function App() {
     <ThemeProvider>
       <ToastContainer />
       {/* Aqui é a barra de fechar e minimizar o app, isso é global! */}
-      <div className="mainContainer">
+      <div className="app-shell">
         <section className="titlebar">
           <button className="close-bar" onClick={close}>X</button>
           <button className="minimize-bar" onClick={minimize}>-</button>

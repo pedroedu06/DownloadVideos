@@ -30,7 +30,7 @@ const Home: React.FC = () => {
   const handleConfirmDownload = async (type: string) => {
     setModalOpen(false);
     try {
-      const response = await axios.post('http://localhost:8000/downloadtask', { url: link, type: type, user_id: createUserId()});
+      const response = await axios.post('http://localhost:8000/downloadtask', { url: link, type: type, user_id: createUserId() });
       const jobId = response.data.job_id || response.data.jobId || crypto.randomUUID();
 
       setPreviews(prev => [{ id: jobId, title: currentPreview?.title || 'unknown', thumbnail: currentPreview?.thumbnail ?? "" }, ...prev]);
@@ -58,9 +58,9 @@ const Home: React.FC = () => {
   }
 
   const handleDownloadofGrid = (videoId: string) => {
-     const link = `https://www.youtube.com/watch?v=${videoId}`;
-     setLink(link)
-     handlePreviewDownload()
+    const link = `https://www.youtube.com/watch?v=${videoId}`;
+    setLink(link)
+    handlePreviewDownload()
   }
 
   const handleSettingsNav = () => {
@@ -68,7 +68,7 @@ const Home: React.FC = () => {
   }
 
   return (
-    <div className="mainContainer">
+    <div className="home-layout">
       <section className="searchbar-configbtns">
         <div className="search-bar-container">
           <label htmlFor="search-bar-url">Busca: </label>
@@ -91,7 +91,7 @@ const Home: React.FC = () => {
       </section>
 
       <section className="YT-Feed">
-        <VideoGrid onClickDownload={handleDownloadofGrid}/>
+        <VideoGrid onClickDownload={handleDownloadofGrid} />
       </section>
 
       {open && <div className="sidebar-backdrop" onClick={() => setOpen(false)} />}
@@ -115,12 +115,12 @@ const Home: React.FC = () => {
           </div>
           <div className="sidebar-content">
             {previews.map(p => (
-              <CardDownloadprogress 
-                key={p.id} 
-                job_id={p.id} 
-                title={p.title} 
-                thumbnail={p.thumbnail} 
-                onClose={(id) => setPreviews(prev => prev.filter(x => x.id !== id))} 
+              <CardDownloadprogress
+                key={p.id}
+                job_id={p.id}
+                title={p.title}
+                thumbnail={p.thumbnail}
+                onClose={(id) => setPreviews(prev => prev.filter(x => x.id !== id))}
               />
             ))}
           </div>
