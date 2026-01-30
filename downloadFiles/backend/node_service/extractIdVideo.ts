@@ -5,10 +5,9 @@ const regex =
   /^(?:https?:\/\/)?(?:www\.)?(?:youtube\.com\/(?:watch\?v=|shorts\/)|youtu\.be\/)([\w-]{11})/;
 
 
-    const match = url.match(regex)
-    console.log(match)
+    const match = url.match(regex);
     if (!match) {
-        throw new Error("URL do youtube e invalida");
+        throw new Error("URL do YouTube é inválida");
     }
 
     return match[1];

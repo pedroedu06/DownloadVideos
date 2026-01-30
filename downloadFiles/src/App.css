@@ -3,7 +3,7 @@
   --background-color: rgb(37, 39, 56);
   --sidebar-color: rgb(56, 58, 75);
   --text-color: #fff;
-  --border-color: #35353f;
+  --border-color: #31313a;
   --btn-color: #fff;
   --hover-color: rgba(56, 58, 75, 0.918);
 }
@@ -13,7 +13,7 @@
 --sidebar-color: #E9EDF3;
 --text-color: #303846;
 --border-color: #C6CCD8;
---btn-color: #F8FAFC;
+--btn-color: #303846;
 --hover-color: #DEE3EB;   
 }
 

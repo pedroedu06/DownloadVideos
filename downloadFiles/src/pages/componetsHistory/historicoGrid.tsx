@@ -1,6 +1,6 @@
 import axios from 'axios';
 import CardHistorico from './cardHistorico'
-import { useEffect, useState } from 'react'
+import { useMemo, useState, useEffect } from 'react'
 import { createUserId } from '../../App';
 import { timeAgo } from './ultilitary/timeAgo';
 import { bytetoHuman } from './ultilitary/bytestoHuman';
@@ -29,23 +29,28 @@ const HistoryGrid: React.FC<HistoryGridProps> = ({ filter = 'recent' }) => {
     const userId = createUserId();
 
     useEffect(() => {
-        console.log(userId)  
-        try {
-            axios.get(`http://localhost:8000/userDownload/${userId}/downloads`)
-                .then(res => {
-                    setData(res.data);
-                })
-                .catch(err => {
-                    console.error("error ao retornar!", err)
-                })
+        const controller = new AbortController();
+        
+        const fetchData = async () => {
+            try {
+                const res = await axios.get(`http://localhost:8000/userDownload/${userId}/downloads`, {
+                    signal: controller.signal
+                });
+                setData(res.data);
+            } catch (err) {
+                if (!axios.isCancel(err)) {
+                    console.error("Erro ao retornar downloads:", err);
+                }
             }
-        catch (err) {
-            console.error(err);
-        }
-    }, []);
+        };
 
-    // Aplicar filtros e ordenação
-    const getFilteredAndSortedData = () => {
+        fetchData();
+        
+        return () => controller.abort();
+    }, [userId]);
+
+    // Otimização com useMemo para evitar reprocessamento desnecessário
+    const filteredData = useMemo(() => {
         let result = [...data];
 
         // Filtrar por tipo (vídeo ou áudio)
@@ -58,54 +63,24 @@ const HistoryGrid: React.FC<HistoryGridProps> = ({ filter = 'recent' }) => {
         // Ordenar
         switch (filter) {
             case 'recent':
-                // Mais recente primeiro (decrescente por data)
-                result.sort((a, b) => {
-                    const dateA = new Date(a.created_at).getTime();
-                    const dateB = new Date(b.created_at).getTime();
-                    return dateB - dateA;
-                });
+            case 'decrescente':
+                result.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
                 break;
 
             case 'crescente':
-                // Crescente por data (mais antigo primeiro)
-                result.sort((a, b) => {
-                    const dateA = new Date(a.created_at).getTime();
-                    const dateB = new Date(b.created_at).getTime();
-                    return dateA - dateB;
-                });
-                break;
-
-            case 'decrescente':
-                // Decrescente por data (mais recente primeiro) - mesmo que recent
-                result.sort((a, b) => {
-                    const dateA = new Date(a.created_at).getTime();
-                    const dateB = new Date(b.created_at).getTime();
-                    return dateB - dateA;
-                });
+                result.sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime());
                 break;
 
             case 'size':
-                // Ordenar por tamanho (maior primeiro)
-                result.sort((a, b) => {
-                    const sizeA = parseInt(a.size) || 0;
-                    const sizeB = parseInt(b.size) || 0;
-                    return sizeB - sizeA;
-                });
+                result.sort((a, b) => (parseInt(b.size) || 0) - (parseInt(a.size) || 0));
                 break;
 
             default:
-                // Para 'video' e 'audio', manter ordem recente
-                result.sort((a, b) => {
-                    const dateA = new Date(a.created_at).getTime();
-                    const dateB = new Date(b.created_at).getTime();
-                    return dateB - dateA;
-                });
+                result.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
         }
 
         return result;
-    };
-
-    const filteredData = getFilteredAndSortedData();
+    }, [data, filter]);
 
     return (
         <div className="sectionGrid">

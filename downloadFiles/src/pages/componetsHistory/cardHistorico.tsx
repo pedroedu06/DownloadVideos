@@ -23,13 +23,13 @@ const CardHistorico: React.FC<HistoryProps> = ({ id, thumb, title, path, size, t
                 <img className="ch-thumbnail" src={thumb} />
             </div>
             <div className='ch-container'>
-                <div className='ch-title'>Titulo do video: <span className='contain'>{title}</span></div>
-                <div className='ch-idyt'>Id do youtube do video: <span className='contain'>{id}</span></div>
+                <div className='ch-title'>Título do vídeo: <span className='contain'>{title}</span></div>
+                <div className='ch-idyt'>ID do YouTube: <span className='contain'>{id}</span></div>
 
                 <div className='ch-metrics-container'>
                     <div className="metric metric-path">
                         <FaFolderOpen />
-                        <span className="label">Path:</span>
+                        <span className="label">Caminho:</span>
                         <span className="path-txt">{path}</span>
                     </div>
 

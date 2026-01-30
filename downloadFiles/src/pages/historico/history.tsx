@@ -47,7 +47,7 @@ const History: React.FC = () => {
                 <div className="left">
                     <div className="backBtnHistory" onClick={backBtn}><span><IoIosArrowBack />Voltar</span></div>
                 </div>
-                <h3>Historico</h3>
+                <h3>Histórico</h3>
                 <div className="right">
                     <div className="filterWrapper" ref={filterRef}>
                         <div className="filterHistory" onClick={toggleFilter}>
@@ -55,39 +55,39 @@ const History: React.FC = () => {
                         </div>
                         {isFilterOpen && (
                             <div className="filterDropdown">
-                                <div 
+                                <div
                                     className={`filterOption ${selectedFilter === 'recent' ? 'active' : ''}`}
                                     onClick={() => handleFilterChange('recent')}
                                 >
                                     Recente
                                 </div>
-                                <div 
+                                <div
                                     className={`filterOption ${selectedFilter === 'crescente' ? 'active' : ''}`}
                                     onClick={() => handleFilterChange('crescente')}
                                 >
                                     Crescente
                                 </div>
-                                <div 
+                                <div
                                     className={`filterOption ${selectedFilter === 'decrescente' ? 'active' : ''}`}
                                     onClick={() => handleFilterChange('decrescente')}
                                 >
                                     Decrescente
                                 </div>
                                 <div className="filterDivider"></div>
-                                <div 
+                                <div
                                     className={`filterOption ${selectedFilter === 'video' ? 'active' : ''}`}
                                     onClick={() => handleFilterChange('video')}
                                 >
                                     Por Vídeo
                                 </div>
-                                <div 
+                                <div
                                     className={`filterOption ${selectedFilter === 'audio' ? 'active' : ''}`}
                                     onClick={() => handleFilterChange('audio')}
                                 >
                                     Por Áudio
                                 </div>
                                 <div className="filterDivider"></div>
-                                <div 
+                                <div
                                     className={`filterOption ${selectedFilter === 'size' ? 'active' : ''}`}
                                     onClick={() => handleFilterChange('size')}
                                 >

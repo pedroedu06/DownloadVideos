@@ -5,6 +5,8 @@ import Home from "./pages/home/home";
 import Settings from "./pages/settings/settings";
 import History from "./pages/historico/history";
 import { ThemeProvider } from "./contexts/ThemeContext";
+import { ToastContainer } from 'react-toastify';
+import 'react-toastify/dist/ReactToastify.css';
 
 let cachedUserId: string | null = null
 
@@ -27,21 +29,22 @@ function App() {
   const close = () => {
     getCurrentWindow().close();
   };
-  const minizimize = () => {
+  const minimize = () => {
     getCurrentWindow().minimize();
   };
 
   return (
     <ThemeProvider>
-      {/*aqui e a barra de fechar e minimizar o app, aqui e global!*/}
+      <ToastContainer />
+      {/* Aqui é a barra de fechar e minimizar o app, isso é global! */}
       <div className="mainContainer">
         <section className="titlebar">
           <button className="close-bar" onClick={close}>X</button>
-          <button className="minimize-bar" onClick={minizimize}>-</button>
+          <button className="minimize-bar" onClick={minimize}>-</button>
         </section>
 
 
-        {/*aqui estao as rotas do app, usando o react-routes*/}
+        {/* Aqui estão as rotas do app, usando o react-router */}
         <Routes>
           <Route path="/" element={<Home />} />
           <Route path="/settings" element={<Settings />} />

@@ -8,7 +8,7 @@ type ModalProps = {
     onConfirm: (type: string) => void;
 }
 
-//modal de selecao de formato de donwload.
+// Modal de seleção de formato de download.
 const ModalSelectedFormat: React.FC<ModalProps> = ({isOpen, onClose, onConfirm}) => {
     const [type, setType] = useState('');
 
@@ -18,16 +18,16 @@ const ModalSelectedFormat: React.FC<ModalProps> = ({isOpen, onClose, onConfirm})
         <div className='modalContainer'>
             <div className='modalContent'>
                 <div className='modalHeader'>
-                    <h2>Selecione o Formato:</h2>
+                    <h2>Selecione o formato:</h2>
                     <button className='closeBtn' onClick={onClose}><IoIosClose /></button>
                 </div>
                 <div className='formatSelections'>
                     <label className='formatItem' htmlFor="Video">
-                        <span>Video</span>
+                        <span>Vídeo</span>
                         <input type="radio" name="format" id="video" checked={type === 'video'} onChange={() => setType('video')} />
                     </label>
                     <label className='formatItem' htmlFor="Audio">
-                        <span>Audio</span>
+                        <span>Áudio</span>
                         <input type="radio" name="format" id="audio" checked={type === 'audio'} onChange={() => setType('audio')} />
                     </label>
                 </div>

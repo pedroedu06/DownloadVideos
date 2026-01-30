@@ -14,60 +14,71 @@ const CardDownloadprogress: React.FC<Props> = ({ job_id, title, thumbnail, onClo
     const [progress, setProgress] = useState<number>(0);
     const [status, setStatus] = useState<string>("queued");
 
-    //retorna os status e progresso do download
-    const fetchDownloadStatus = async (job_id: string) => {
-        try {
-            const res = await axios.get(
-                `http://localhost:8000/downloadStatus/${job_id}`
-            );
-
-            setStatus(res.data.status);
-            setProgress(res.data.progress);
-
-            return res.data;
-        } catch (err) {
-            console.error("erro ao buscar status de download:", err);
-            throw err;
-        }
-    };
-    //tranforma em frontend esses status. 
+    // Efeito único para polling de status e encerramento (Single source of truth)
     useEffect(() => {
-        const interval = setInterval(async () => {
+        const controller = new AbortController();
+        
+        const fetchStatus = async () => {
             try {
-                const data = await fetchDownloadStatus(job_id);
-
-                setProgress(data.progress)
-                setStatus(data.status)
+                const res = await axios.get(`http://localhost:8000/downloadStatus/${job_id}`, {
+                    signal: controller.signal
+                });
                 
+                const data = res.data;
+                setProgress(data.progress);
+                setStatus(data.status);
 
                 if (data.status === "done" || data.status === "failed") {
-                    clearInterval(interval);
+                    if (data.status === "done") {
+                        onClose(job_id);
+                    }
+                    return true; // Para o polling
                 }
-            } catch {
-                clearInterval(interval);
+            } catch (err) {
+                if (!axios.isCancel(err)) {
+                    console.error("Erro ao buscar status de download:", err);
+                    return true; // Para o polling em caso de erro crítico
+                }
+            }
+            return false;
+        };
+
+        const intervalId = setInterval(async () => {
+            const shouldStop = await fetchStatus();
+            if (shouldStop) {
+                clearInterval(intervalId);
             }
         }, 1000);
 
-        return () => clearInterval(interval);
-    }, [job_id]);
+        // Executa a primeira vez imediatamente
+        fetchStatus();
 
-    console.log(progress);
-
-    useEffect(() => {
-        if(status === "done") {
-            onClose(job_id)
-        }
-    }, [status, job_id, onClose])
+        return () => {
+            controller.abort();
+            clearInterval(intervalId);
+        };
+    }, [job_id, onClose]);
 
     return (
         <div className='cv-card-progress'>
             <div className='cv-card-progress-container'>
-                <div className='cv-close-container'>
+                <div className='cv-card-header'>
+                    <div className='cv-video-info-container'>
+                        <div className='cv-thumbnail-wrapper'>
+                            <img className='cv-video-thumbnail' src={thumbnail || undefined} alt={title} />
+                        </div>
+                        <div className='cv-video-meta'>
+                            <h3 className='cv-video-title' title={title}>{title}</h3>
+                            <p className='cv-video-status-text'>
+                                {status.charAt(0).toUpperCase() + status.slice(1)}
+                            </p>
+                        </div>
+                    </div>
                     <button className='cv-close-item' onClick={async () => {
                         try {
                             await axios.post(`http://localhost:8000/downloadCancel/${job_id}`);
                         } catch (err) {
-                            console.error('erro ao cancelar download:', err);
+                            console.error('Erro ao cancelar download:', err);
                         }
                         onClose(job_id);
                     }} aria-label="fechar">
@@ -75,25 +86,15 @@ const CardDownloadprogress: React.FC<Props> = ({ job_id, title, thumbnail, onClo
                     </button>
                 </div>
 
-                <div className='cv-video-info-container'>
-                    <img className='cv-video-thumbnail' src={thumbnail || undefined} alt={title} />
-                    <div className='cv-video-meta'>
-                        <h3 className='cv-video-title' title={title}>{title}</h3>
-                        <p className='cv-video-status-progress'>{status}</p>
-                    </div>
-                </div>
-
                 <div className='cv-progressbar-container'>
                     <div className='cv-progressbar-bg' role="progressbar" aria-valuemin={0} aria-valuemax={100} aria-valuenow={Math.round(progress)} aria-label={`Progresso de download: ${Math.round(progress)}%`}>
-                        {/* A largura do elemento de fill é controlada pelo progresso (0-100) */}
                         <div
                             className='cv-progressbar-fill'
                             style={{
                                 width: `${progress}%`,
                                 background:
-                                    status === "failed" ? "#dc2626" :
-                                        status === "done" ? "#16a34a" :
-                                            "#4f46e5"
+                                    status === "failed" ? "#ef4444" :
+                                        "#22c55e" 
                             }}
                         />
                     </div>

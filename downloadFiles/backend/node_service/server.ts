@@ -40,13 +40,14 @@ app.post('/getInfoVideo', async (req, res) => {
         const prewiewInfo = await getInfosVideo(VideoId);
 
         res.json(prewiewInfo);
-    } catch (error) {
-        console.error("error no /getInfoVideo:", error);
-        if (res.status(403)){
-            console.error("youtube bloqueou a requisicao")
+    } catch (error: any) {
+        if (error.response?.status === 403) {
+            console.error("YouTube bloqueou a requisição (provável limite de API ou IP)");
+        } else {
+            console.error("Erro no /getInfoVideo:", error);
         }
         
-        res.status(500).json({ error: "falha ao obter as informacoes do video" });
+        res.status(500).json({ error: "Falha ao obter as informações do vídeo" });
     }
 })
 

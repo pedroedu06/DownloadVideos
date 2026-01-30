@@ -16,7 +16,7 @@ type VideoConfig = {
   onClickDownload: (videoId: string) => void;
 }
 
-//aqui e o componente pai, dos componentes de recomendados.
+// Aqui é o componente pai dos componentes de recomendados.
 const CardVideo: React.FC<VideoConfig> = ({ Video, onClickDownload }) => {
   return (
     <div className="cv-card">
@@ -27,7 +27,7 @@ const CardVideo: React.FC<VideoConfig> = ({ Video, onClickDownload }) => {
         <span className="cv-metric"><FaEye className="cv-icon" /> <span className="cv-number">{Video.views}</span></span>
       </div>
       <div className="cv-download-wrapper">
-        <button className="cv-download-btn" onClick={() => onClickDownload(Video.id)}>baixar</button>
+        <button className="cv-download-btn" onClick={() => onClickDownload(Video.id)}>Baixar</button>
       </div>
     </div>
   );

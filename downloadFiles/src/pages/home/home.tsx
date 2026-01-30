@@ -12,7 +12,7 @@ import ModalSelectedFormat from "../../components/ModalSelectedFormat";
 import { createUserId } from "../../App";
 
 const Home: React.FC = () => {
-  //reload na pagina, tipo um f5
+  // Recarregar a página
   const reload = () => {
     window.location.reload();
   }
@@ -26,13 +26,11 @@ const Home: React.FC = () => {
   const navigateSettings = useNavigate();
 
 
-  // aqui confirma o seu donwload e envia para o worker
+  // Aqui confirma o seu download e envia para o worker
   const handleConfirmDownload = async (type: string) => {
     setModalOpen(false);
-    console.log(createUserId());
     try {
       const response = await axios.post('http://localhost:8000/downloadtask', { url: link, type: type, user_id: createUserId()});
-      console.log('Download iniciado:', response.data);
       const jobId = response.data.job_id || response.data.jobId || crypto.randomUUID();
 
       setPreviews(prev => [{ id: jobId, title: currentPreview?.title || 'unknown', thumbnail: currentPreview?.thumbnail ?? "" }, ...prev]);
@@ -40,23 +38,22 @@ const Home: React.FC = () => {
       setCurrentPreview(null);
 
     } catch (error) {
-      console.log("erro ao iniciar o donwload", error)
+      console.error("Erro ao iniciar o download:", error);
       return null;
     }
   }
 
-  //aqui ele encontra seu video e abre o modal de escolha de formato de donwload
+  // Aqui ele encontra seu vídeo e abre o modal de escolha de formato de download
   const handlePreviewDownload = async () => {
     if (!link) return;
     try {
       const res = await axios.post('http://localhost:3000/getInfoVideo', { url: link });
-      console.log('Preview info:', res.data);
       const title = res.data.title || 'unknown';
       const thumbnail = res.data.thumbnail || null;
       setCurrentPreview({ title, thumbnail });
       setModalOpen(true);
     } catch (error) {
-      console.log('error no preview', error);
+      console.error('Erro no preview:', error);
     }
   }
 
@@ -94,63 +91,59 @@ const Home: React.FC = () => {
       </section>
 
       <section className="YT-Feed">
-        <VideoGrid onClickDonwload={handleDownloadofGrid}/>
+        <VideoGrid onClickDownload={handleDownloadofGrid}/>
       </section>
 
-      {open && <div className="sidebar-backdrop" />}
+      {open && <div className="sidebar-backdrop" onClick={() => setOpen(false)} />}
 
-      <div className="side-bar" style={{ position: "relative" }}>
+      <div className="side-bar">
         <div
           className="sidebar-container"
           style={{
             transform: open ? "translateX(0)" : "translateX(100%)",
-            transition: "transform 0.35s cubic-bezier(.4,0,.2,1)",
-            position: "relative",
-            zIndex: 2,
-            display: 'flex',
-            flexDirection: 'column',
-            gap: '8px',
-            padding: '12px'
           }}
         >
-          {previews.map(p => (
-            <CardDownloadprogress key={p.id} job_id={p.id} title={p.title} thumbnail={p.thumbnail} onClose={(id) => setPreviews(prev => prev.filter(x => x.id !== id))} />
-          ))}
+          <div className="sidebar-header">
+            <button
+              className="sidebar-toggle-btn"
+              onClick={() => setOpen(false)}
+            >
+              <span className="arrow" style={{ transform: 'rotate(180deg)' }}>
+                <MdKeyboardArrowLeft />
+              </span>
+            </button>
+          </div>
+          <div className="sidebar-content">
+            {previews.map(p => (
+              <CardDownloadprogress 
+                key={p.id} 
+                job_id={p.id} 
+                title={p.title} 
+                thumbnail={p.thumbnail} 
+                onClose={(id) => setPreviews(prev => prev.filter(x => x.id !== id))} 
+              />
+            ))}
+          </div>
         </div>
-        <button
-          className="sidebar-toggle-btn"
-          style={{
-            position: "absolute",
-            top: "16px",
-            right: open ? "330px" : "0px",
-            zIndex: 3,
-            height: "46px",
-            width: "40px",
-            background: "var(--sidebar-color)",
-            border: "1px solid var(--border-color)",
-            borderRight: "none",
-            borderRadius: "16px 0 0 16px",
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-            cursor: "pointer",
-            transition: "right 0.35s cubic-bezier(.4,0,.2,1), background 0.2s, border-radius 0.2s",
-          }}
-          onClick={() => setOpen((v) => !v)}
-        >
-          <span
-            className="arrow"
+
+        {!open && (
+          <button
+            className="sidebar-toggle-btn"
             style={{
-              fontSize: 35,
-              color: "var(--text-color)",
-              transition: "transform 0.3s cubic-bezier(.4,0,.2,1)",
-              transform: open ? "rotate(180deg)" : "rotate(0deg)",
-              userSelect: "none",
+              position: "fixed",
+              top: "130px",
+              right: "0",
+              borderRadius: "12px 0 0 12px",
+              borderRight: "none",
+              width: "34px" // Slightly narrower to look better stuck to the wall
             }}
+            onClick={() => setOpen(true)}
           >
-            <MdKeyboardArrowLeft />
-          </span>
-        </button>
+            <span className="arrow">
+              <MdKeyboardArrowLeft />
+            </span>
+          </button>
+        )}
       </div>
     </div>
   )
