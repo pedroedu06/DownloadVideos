@@ -26,3 +26,5 @@ packege.json
 *.sln
 *.sw?
 .env
+
+backend/bin/

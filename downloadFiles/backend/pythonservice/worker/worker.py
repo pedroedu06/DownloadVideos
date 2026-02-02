@@ -224,10 +224,20 @@ def process_job(job_id: str):
         DOWNLOAD_DIR = Path.home() / 'Downloads'
         
     
+    # Localizar o FFmpeg de forma portátil
+    # O worker está em backend/pythonservice/worker/worker.py
+    # O ffmpeg está em backend/bin/ffmpeg/ffmpeg.exe
+    base_path = Path(__file__).resolve().parent.parent.parent # Sobe para a pasta 'backend'
+    ffmpeg_bin = base_path / "bin" / "ffmpeg" / "ffmpeg.exe"
+    
+    # Se não achar o interno (em dev), tenta o do sistema
+    ffmpeg_location = str(ffmpeg_bin) if ffmpeg_bin.exists() else None
+
     # opções base comuns
     ydl_opts = {
         "progress_hooks": [hook],
         "outtmpl": str(DOWNLOAD_DIR / "%(title)s_%(format_id)s.%(ext)s"),
+        "ffmpeg_location": ffmpeg_location,
         "js-runtimes": ["node"],
         "user_agent": (
             "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "

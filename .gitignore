@@ -1,0 +1,32 @@
+# Binaries e Bibliotecas Pesadas
+downloadFiles/backend/bin/
+
+# Node.js
+**/node_modules/
+**/dist/
+**/dist-ssr/
+*.local
+npm-debug.log*
+
+# Python
+**/__pycache__/
+**/*.pyc
+**/*.pyo
+**/*.pyd
+.Python
+env/
+venv/
+.venv/
+
+# Rust / Tauri
+downloadFiles/src-tauri/target/
+downloadFiles/src-tauri/gen/schemas/
+
+# IDE e Outros
+.vscode/
+.idea/
+.DS_Store
+*.suo
+*.sln
+*.swp
+.env

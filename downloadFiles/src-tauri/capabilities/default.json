@@ -4,12 +4,11 @@
   "description": "Capability for the main window",
   "windows": ["main"],
   "permissions": [
-    "dialog:allow-open",
     "core:default",
     "core:resources:default",
     "core:window:allow-close",
-    "core:window:allow-minimize",  
+    "core:window:allow-minimize",
     "opener:default",
-    "dialog:allow-message"
+    "dialog:default"
   ]
 }
