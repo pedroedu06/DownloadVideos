@@ -27,7 +27,6 @@
       "csp": null
     }
   },
-
   "bundle": {
     "active": true,
     "targets": "all",
@@ -39,7 +38,9 @@
       "icons/icon.ico"
     ],
     "resources": [
-      "../backend/**/*"
+      "../backend/bin",
+      "../backend/pythonservice",
+      "../backend/node_service/dist"
     ]
   }
 }

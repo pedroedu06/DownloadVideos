@@ -1,3 +1,5 @@
 bin/
 __pycache__/
 .env
+bootstrap_worker
+bootstrap_api

@@ -7,13 +7,43 @@ yarn-error.log*
 pnpm-debug.log*
 lerna-debug.log*
 
-node_modules
-dist
-dist-ssr
-*.local
+# Dependencies
+node_modules/
 
-packege-lock.json
-packege.json
+# Build outputs
+dist/
+dist-ssr/
+build/
+out/
+target/
+src-tauri/target/
+src-tauri/gen/
+**/*.spec
+
+# Scripts and bootstrap
+scripts/
+bootstrap/
+bootstrap_worker
+bootstrap_api
+
+# Backend artifacts
+backend/bin/
+backend/node_service/dist/
+backend/node_service/node_modules/
+backend/pythonservice/__pycache__/
+backend/pythonservice/dist/
+backend/pythonservice/build/
+backend/redis/data/
+backend/redis/data-prod/
+
+
+# Python generic
+__pycache__/
+*.py[cod]
+*$py.class
+.venv/
+venv/
+env/
 
 # Editor directories and files
 .vscode/*
@@ -26,5 +56,6 @@ packege.json
 *.sln
 *.sw?
 .env
+.env.*
+*.env
 
-backend/bin/

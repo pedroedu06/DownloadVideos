@@ -37,29 +37,41 @@ app.add_middleware(
 def create_download(data: DownloadRequest):
     job_id = str(uuid4())
 
-    redisClient.set(f"download:{job_id}:type", data.type)
-    redisClient.set(f"download:{job_id}:status", "queued")
-    redisClient.set(f"download:{job_id}:progress", 0)
-    redisClient.set(f"download:{job_id}:url", data.url)
-    redisClient.set(f"download:{job_id}:user_id", data.user_id)
-
-    redisClient.expire(f"download:{job_id}:status", 3600)
-    redisClient.expire(f"download:{job_id}:progress", 3600)
-    redisClient.expire(f"download:{job_id}:url", 3600)
-    redisClient.expire(f"download:{job_id}:format", 3600)
-    redisClient.expire(f"download:{job_id}:user_id", 3600)
-
-    redisClient.sadd(f"user:{data.user_id}:jobs", job_id)
-
-    redisClient.lpush("queue:downloads", job_id)
+    # Usa pipeline para agrupar todas as operações em um único round-trip
+    pipe = redisClient.pipeline(transaction=False)
+    pipe.set(f"download:{job_id}:type", data.type)
+    pipe.set(f"download:{job_id}:status", "queued")
+    pipe.set(f"download:{job_id}:progress", 0)
+    pipe.set(f"download:{job_id}:url", data.url)
+    pipe.set(f"download:{job_id}:user_id", data.user_id)
+    
+    # Todas as expirações juntas
+    pipe.expire(f"download:{job_id}:status", 3600)
+    pipe.expire(f"download:{job_id}:progress", 3600)
+    pipe.expire(f"download:{job_id}:url", 3600)
+    pipe.expire(f"download:{job_id}:format", 3600)
+    pipe.expire(f"download:{job_id}:user_id", 3600)
+    
+    pipe.sadd(f"user:{data.user_id}:jobs", job_id)
+    pipe.lpush("queue:downloads", job_id)
+    pipe.execute()
 
     return {"job_id": job_id}
 
 # aqui ele retorna status, progresso do job_id do worker
 @app.get("/downloadStatus/{job_id}", response_model=DownloadStatus)
 def get_status(job_id: str):
-    status = redisClient.get(f"download:{job_id}:status")
-    progress = progress_manager.get_progress(job_id)
+    # Pipeline: busca status e progresso em um único round-trip
+    pipe = redisClient.pipeline(transaction=False)
+    pipe.get(f"download:{job_id}:status")
+    pipe.get(f"download:{job_id}:progress")
+    results = pipe.execute()
+    
+    status = results[0]
+    try:
+        progress = float(results[1] or 0)
+    except Exception:
+        progress = 0.0
 
     return {
         "job_id": job_id,
@@ -70,10 +82,11 @@ def get_status(job_id: str):
 # aqui ele cancela o download e retorna o status de 'cancelled'
 @app.post("/downloadCancel/{job_id}")
 def cancel_download(job_id: str):
-    cancel_key = f"download:{job_id}:cancel"
-    redisClient.set(cancel_key, "1")
-    redisClient.set(f"download:{job_id}:status", "cancelled")
-    redisClient.set(f"download:{job_id}:progress", 0)
+    pipe = redisClient.pipeline(transaction=False)
+    pipe.set(f"download:{job_id}:cancel", "1")
+    pipe.set(f"download:{job_id}:status", "cancelled")
+    pipe.set(f"download:{job_id}:progress", 0)
+    pipe.execute()
     return {"job_id": job_id, "cancelled": True}
 
 @app.post('/downloadPath')
@@ -91,9 +104,12 @@ def set_download_settings(settings: dict = Body(...)):
         'audio_quality': 'settings:audio:quality',
     }
 
+    # Pipeline para salvar todas as configurações de uma vez
+    pipe = redisClient.pipeline(transaction=False)
     for k, v in settings.items():
         if k in mapping and v is not None:
-            redisClient.set(mapping[k], str(v))
+            pipe.set(mapping[k], str(v))
+    pipe.execute()
 
     return {"status": "ok"}
 
@@ -101,23 +117,38 @@ def set_download_settings(settings: dict = Body(...)):
 @app.get('/list_downloads', response_model=List[DownloadInfo])
 def list_downloads():
     ids = redisClient.smembers('downloads:completed') or []
-    results = []
+    if not ids:
+        return []
+    
+    # Pipeline: buscar todas as infos de uma vez
+    pipe = redisClient.pipeline(transaction=False)
     for job_id in ids:
-        raw = redisClient.get(f"download:{job_id}:info")
+        pipe.get(f"download:{job_id}:info")
+    raw_results = pipe.execute()
+    
+    results = []
+    for job_id, raw in zip(ids, raw_results):
         if raw:
             try:
                 info = json.loads(raw)
             except Exception:
                 info = {"job_id": job_id, "title": "Error parsing metadata"}
         else:
+            # Fallback: buscar campos individuais via pipeline
+            fb_pipe = redisClient.pipeline(transaction=False)
+            fb_pipe.get(f"download:{job_id}:id")
+            fb_pipe.get(f"download:{job_id}:title")
+            fb_pipe.get(f"download:{job_id}:type")
+            fb_results = fb_pipe.execute()
+            
             info = {
                 "job_id": job_id,
-                "id": redisClient.get(f"download:{job_id}:id"),
-                "title": redisClient.get(f"download:{job_id}:title"),
+                "id": fb_results[0],
+                "title": fb_results[1],
                 "filename": None,
                 "path": None,
                 "size": None,
-                "type": redisClient.get(f"download:{job_id}:type"),
+                "type": fb_results[2],
                 "created_at": None,
             }
         results.append(info)
@@ -127,10 +158,17 @@ def list_downloads():
 @app.get('/userDownload/{user_id}/downloads')  
 def list_user_downloads(user_id: str):
     ids = redisClient.smembers(f"user:{user_id}:downloads:completed") or []
-    resultsUser = []
-
+    if not ids:
+        return []
+    
+    # Pipeline: buscar todas as infos de uma vez
+    pipe = redisClient.pipeline(transaction=False)
     for job_id in ids:
-        raw = redisClient.get(f"download:{job_id}:info")
+        pipe.get(f"download:{job_id}:info")
+    raw_results = pipe.execute()
+    
+    resultsUser = []
+    for job_id, raw in zip(ids, raw_results):
         if raw:
             try:
                 info = json.loads(raw)

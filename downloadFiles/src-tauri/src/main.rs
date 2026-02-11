@@ -1,11 +1,19 @@
 // Prevents additional console window on Windows in release, DO NOT REMOVE!!
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
+use std::net::TcpListener;
 use std::process::{Child, Command, Stdio};
 use std::sync::Mutex;
 use tauri::{path::BaseDirectory, Manager, WindowEvent};
 use std::io::{BufRead, BufReader};
 use std::thread;
+use std::time::Instant;
+
+#[cfg(windows)]
+use std::os::windows::process::CommandExt;
+
+#[cfg(windows)]
+const CREATE_NO_WINDOW: u32 = 0x08000000;
 
 struct BackendProcess {
     api: Option<Child>,
@@ -13,55 +21,84 @@ struct BackendProcess {
     node: Option<Child>,
 }
 
+fn is_port_free(port: u16) -> bool {
+    TcpListener::bind(("127.0.0.1", port)).is_ok()
+}
+
 impl BackendProcess {
     fn kill_all(&mut self) {
+        let start = Instant::now();
         println!("[Tauri] Encerrando todos os processos de backend...");
-        if let Some(mut child) = self.api.take() {
-            let _ = child.kill();
+
+        // Mata todos os processos em paralelo usando threads
+        let api = self.api.take();
+        let worker = self.worker.take();
+        let node = self.node.take();
+
+        let handles: Vec<_> = [
+            ("API", api),
+            ("Worker", worker),
+            ("Node", node),
+        ]
+        .into_iter()
+        .filter_map(|(name, child)| {
+            child.map(|mut c| {
+                thread::spawn(move || {
+                    let _ = c.kill();
+                    let _ = c.wait(); // Evita processos zumbis
+                    println!("[Tauri] {} encerrado.", name);
+                })
+            })
+        })
+        .collect();
+
+        for h in handles {
+            let _ = h.join();
         }
-        if let Some(mut child) = self.worker.take() {
-            let _ = child.kill();
-        }
-        if let Some(mut child) = self.node.take() {
-            let _ = child.kill();
-        }
+        println!("[Tauri] Todos os processos encerrados em {:?}", start.elapsed());
     }
 }
 
 fn spawn_and_log(mut command: Command, name: &'static str) -> std::io::Result<Child> {
-    // Redireciona stdout e stderr para que possamos ver o que acontece no backend
     command.stdout(Stdio::piped());
     command.stderr(Stdio::piped());
 
+    #[cfg(windows)]
+    command.creation_flags(CREATE_NO_WINDOW);
+
     let mut child = command.spawn()?;
-    
-    let stdout = child.stdout.take().unwrap();
-    let stderr = child.stderr.take().unwrap();
 
-    // Thread para logar o stdout
-    thread::spawn(move || {
-        let reader = BufReader::new(stdout);
-        for line in reader.lines() {
-            if let Ok(l) = line {
-                println!("[{}] {}", name, l);
+    if let Some(stdout) = child.stdout.take() {
+        thread::spawn(move || {
+            let reader = BufReader::with_capacity(8192, stdout);
+            for line in reader.lines() {
+                if let Ok(l) = line {
+                    println!("[{}] {}", name, l);
+                }
             }
-        }
-    });
+        });
+    }
 
-    // Thread para logar o stderr
-    thread::spawn(move || {
-        let reader = BufReader::new(stderr);
-        for line in reader.lines() {
-            if let Ok(l) = line {
-                eprintln!("[{} ERROR] {}", name, l);
+    if let Some(stderr) = child.stderr.take() {
+        thread::spawn(move || {
+            let reader = BufReader::with_capacity(8192, stderr);
+            for line in reader.lines() {
+                if let Ok(l) = line {
+                    if l.to_lowercase().contains("error") {
+                        eprintln!("[{} ERROR] {}", name, l);
+                    } else {
+                        println!("[{} Log] {}", name, l);
+                    }
+                }
             }
-        }
-    });
+        });
+    }
 
     Ok(child)
 }
 
 fn main() {
+
     tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_opener::init())
@@ -71,10 +108,21 @@ fn main() {
             node: None,
         }))
         .setup(|app| {
+            let startup_time = Instant::now();
             let handle = app.handle();
             let state = handle.state::<Mutex<BackendProcess>>();
 
-            // 1. Tratar paths de forma robusta
+            // 1. Tratar paths de forma robusta para Tauri 2.0
+            let resolve_path = |path: &str| {
+                if let Ok(p) = handle.path().resolve(path, BaseDirectory::Resource) {
+                    if p.exists() { return p; }
+                }
+                if let Ok(p) = handle.path().resolve(format!("_up_/backend/{}", path), BaseDirectory::Resource) {
+                    if p.exists() { return p; }
+                }
+                handle.path().resolve(path, BaseDirectory::Resource).unwrap()
+            };
+
             let (python_dir, node_dir) = if cfg!(debug_assertions) {
                 let mut base = std::env::current_dir().unwrap();
                 if base.ends_with("src-tauri") {
@@ -83,84 +131,189 @@ fn main() {
                 (base.join("backend/pythonservice"), base.join("backend/node_service"))
             } else {
                 (
-                    app.path().resolve("backend/pythonservice", BaseDirectory::Resource).expect("Erro Python Path"),
-                    app.path().resolve("backend/node_service", BaseDirectory::Resource).expect("Erro Node Path")
+                    resolve_path("pythonservice"),
+                    resolve_path("node_service/dist")
                 )
             };
 
-            println!("[Tauri] Python Dir: {:?}", python_dir);
-            println!("[Tauri] Node Dir: {:?}", node_dir);
+            let normalize = |p: std::path::PathBuf| -> String {
+                let s = p.to_string_lossy().to_string();
+                let path = if s.starts_with(r"\\?\") {
+                    s[4..].to_string()
+                } else {
+                    s
+                };
+                path.replace("/", "\\")
+            };
 
-            // 2. Definir binários
+            let python_dir_str = normalize(python_dir.clone());
+            let node_dir_str = normalize(node_dir.clone());
+
+            println!("[Tauri] Python Dir: {}", python_dir_str);
+            println!("[Tauri] Node Dir: {}", node_dir_str);
+
+            let python_bin_dir = if cfg!(debug_assertions) {
+                "".to_string()
+            } else {
+                normalize(resolve_path("bin/python"))
+            };
+
             let python_bin = if cfg!(debug_assertions) {
                 "python".to_string()
             } else {
-                app.path()
-                    .resolve("backend/bin/python/python.exe", BaseDirectory::Resource)
-                    .map(|p| p.to_string_lossy().to_string())
-                    .unwrap_or_else(|_| "python".to_string())
+                normalize(resolve_path("bin/python/python.exe"))
             };
 
             let node_bin = if cfg!(debug_assertions) {
                 "node".to_string()
             } else {
-                app.path()
-                    .resolve("backend/bin/node/node.exe", BaseDirectory::Resource)
-                    .map(|p| p.to_string_lossy().to_string())
-                    .unwrap_or_else(|_| "node".to_string())
+                normalize(resolve_path("bin/node/node.exe"))
             };
 
-            // 3. Execução dos Processos com Logs
-            let mut processes = state.lock().unwrap();
+            // ============================================================
+            // 2. LANÇAMENTO PARALELO DOS PROCESSOS
+            //    Os 3 processos são preparados como closures e lançados em
+            //    threads separadas para reduzir o tempo de startup.
+            // ============================================================
 
-            // API Python
-            if !python_dir.exists() {
-                eprintln!("[Tauri] Erro: Diretório da API Python não encontrado em {:?}", python_dir);
-            } else {
-                let mut api_args = vec!["-m", "uvicorn", "api.main:app", "--host", "127.0.0.1", "--port", "8000"];
-                if cfg!(debug_assertions) {
-                    api_args.push("--reload");
+            // Clones necessários para mover para as threads
+            let python_dir_api = python_dir.clone();
+            let python_dir_str_api = python_dir_str.clone();
+            let python_bin_dir_api = python_bin_dir.clone();
+            let python_bin_api = python_bin.clone();
+
+            let python_dir_worker = python_dir.clone();
+            let python_dir_str_worker = python_dir_str.clone();
+            let python_bin_dir_worker = python_bin_dir.clone();
+            let python_bin_worker = python_bin.clone();
+
+            let node_dir_spawn = node_dir.clone();
+            let node_bin_spawn = node_bin.clone();
+
+            // Thread 1: Python API
+            let api_handle = thread::spawn(move || -> Option<Child> {
+                if !python_dir_api.exists() {
+                    eprintln!("[Tauri] Erro: Diretório da API Python não encontrado em {:?}", python_dir_api);
+                    return None;
+                }
+                if !is_port_free(8000) {
+                    eprintln!("[Tauri] AVISO: Porta 8000 já está em uso. Assumindo que a API já está rodando.");
+                    return None;
                 }
 
-                let mut cmd = Command::new(&python_bin);
-                cmd.current_dir(&python_dir).args(&api_args);
-                
+                let mut cmd = Command::new(&python_bin_api);
+                cmd.current_dir(&python_dir_api);
+                cmd.env("PYTHONPATH", &python_dir_str_api);
+
+                if !python_bin_dir_api.is_empty() {
+                    cmd.env("PYTHONHOME", &python_bin_dir_api);
+                    if let Ok(existing_path) = std::env::var("PATH") {
+                        cmd.env("PATH", format!("{};{}", python_bin_dir_api, existing_path));
+                    }
+                }
+
+                cmd.args(["bootstrap_api.py"]);
+                cmd.env("YT_DATA_API_KEY", "AIzaSyDfSwbdyz2ureSis9Fzsa7CA-D7qG3eKK4")
+                   .env("BASE_URL", "https://www.googleapis.com/youtube/v3");
+
                 match spawn_and_log(cmd, "Python-API") {
-                    Ok(child) => processes.api = Some(child),
-                    Err(e) => eprintln!("[Tauri] Falha ao iniciar Python-API: {}", e),
+                    Ok(child) => Some(child),
+                    Err(e) => {
+                        eprintln!("[Tauri] Falha ao iniciar Python-API: {}", e);
+                        None
+                    }
                 }
-            }
+            });
 
-            // Node Service
-            if !node_dir.exists() {
-                eprintln!("[Tauri] Erro: Diretório do Node Service não encontrado em {:?}", node_dir);
-            } else {
-                let mut node_cmd = if cfg!(debug_assertions) {
+            // Thread 2: Node Service
+            let node_handle = thread::spawn(move || -> Option<Child> {
+                if !node_dir_spawn.exists() {
+                    eprintln!("[Tauri] Erro: Diretório do Node Service não encontrado em {:?}", node_dir_spawn);
+                    return None;
+                }
+                if !is_port_free(3000) {
+                    eprintln!("[Tauri] AVISO: Porta 3000 já está em uso. Assumindo que o Node Service já está rodando.");
+                    return None;
+                }
+
+                let node_cmd = if cfg!(debug_assertions) {
                     let mut cmd = Command::new("cmd");
-                    cmd.current_dir(&node_dir).args(["/c", "npx", "ts-node", "server.ts"]);
+                    cmd.current_dir(&node_dir_spawn).args(["/c", "npx", "ts-node", "server.ts"]);
                     cmd
                 } else {
-                    let mut cmd = Command::new(&node_bin);
-                    cmd.current_dir(&node_dir).args(["dist/server.js"]);
+                    let (run_dir, script) = if node_dir_spawn.join("index.js").exists() {
+                        (node_dir_spawn.clone(), "index.js")
+                    } else if node_dir_spawn.join("server.js").exists() {
+                        (node_dir_spawn.clone(), "server.js")
+                    } else if node_dir_spawn.join("dist/index.js").exists() {
+                        (node_dir_spawn.join("dist"), "index.js")
+                    } else if node_dir_spawn.join("dist/server.js").exists() {
+                        (node_dir_spawn.join("dist"), "server.js")
+                    } else {
+                        (node_dir_spawn.clone(), "server.js")
+                    };
+
+                    println!("[Tauri] Iniciando Node em: {:?} com script: {}", run_dir, script);
+
+                    let mut cmd = Command::new(&node_bin_spawn);
+                    cmd.current_dir(&run_dir)
+                        .env("YT_DATA_API_KEY", "AIzaSyDfSwbdyz2ureSis9Fzsa7CA-D7qG3eKK4")
+                        .env("BASE_URL", "https://www.googleapis.com/youtube/v3")
+                        .args([script]);
                     cmd
                 };
 
                 match spawn_and_log(node_cmd, "Node-Service") {
-                    Ok(child) => processes.node = Some(child),
-                    Err(e) => eprintln!("[Tauri] Falha ao iniciar Node-Service: {}", e),
+                    Ok(child) => Some(child),
+                    Err(e) => {
+                        eprintln!("[Tauri] Falha CRÍTICA ao iniciar Node-Service: {}. Pasta: {:?}", e, node_dir_spawn);
+                        None
+                    }
                 }
-            }
+            });
 
-            // Worker Python
-            if python_dir.exists() {
-                let mut worker_cmd = Command::new(&python_bin);
-                worker_cmd.current_dir(&python_dir).args(["-m", "worker.worker"]);
-                
-                match spawn_and_log(worker_cmd, "Python-Worker") {
-                    Ok(child) => processes.worker = Some(child),
-                    Err(e) => eprintln!("[Tauri] Falha ao iniciar Python-Worker: {}", e),
+            // Thread 3: Python Worker
+            let worker_handle = thread::spawn(move || -> Option<Child> {
+                if !python_dir_worker.exists() {
+                    eprintln!("[Tauri] Erro: Diretório do Worker Python não encontrado em {:?}", python_dir_worker);
+                    return None;
                 }
-            }
+
+                let mut worker_cmd = Command::new(&python_bin_worker);
+                worker_cmd.current_dir(&python_dir_worker);
+
+                let python_path = vec![
+                    python_dir_str_worker.clone(),
+                    format!("{}/Lib/site-packages", python_bin_dir_worker),
+                    format!("{}/python312.zip", python_bin_dir_worker),
+                ];
+                worker_cmd.env("PYTHONPATH", python_path.join(";"));
+
+                if !python_bin_dir_worker.is_empty() {
+                    worker_cmd.env("PYTHONHOME", &python_bin_dir_worker);
+                    if let Ok(existing_path) = std::env::var("PATH") {
+                        worker_cmd.env("PATH", format!("{};{}", python_bin_dir_worker, existing_path));
+                    }
+                }
+
+                worker_cmd.args(["bootstrap_worker.py"]);
+
+                match spawn_and_log(worker_cmd, "Python-Worker") {
+                    Ok(child) => Some(child),
+                    Err(e) => {
+                        eprintln!("[Tauri] Falha ao iniciar Python-Worker: {}", e);
+                        None
+                    }
+                }
+            });
+
+            // Aguarda todas as threads finalizarem e coleta os resultados
+            let mut processes = state.lock().unwrap();
+            processes.api = api_handle.join().unwrap_or(None);
+            processes.node = node_handle.join().unwrap_or(None);
+            processes.worker = worker_handle.join().unwrap_or(None);
+
+            println!("[Tauri] Todos os backends iniciados em {:?}", startup_time.elapsed());
 
             Ok(())
         })
@@ -174,4 +327,3 @@ fn main() {
         .run(tauri::generate_context!())
         .expect("erro ao rodar o tauri");
 }
-
