@@ -15,6 +15,10 @@ from yt_dlp import YoutubeDL
 REDIS_HOST = os.getenv('REDIS_HOST', 'localhost')
 REDIS_PORT = int(os.getenv('REDIS_PORT', 6379))
 REDIS_PASS = os.getenv('REDIS_PASSWORD')
+if REDIS_PASS and not REDIS_PASS.strip():
+    REDIS_PASS = None
+elif not REDIS_PASS:
+    REDIS_PASS = None
 
 # Pool de conexões Redis - reutiliza conexões em vez de criar novas
 _redis_pool = redis.ConnectionPool(
@@ -423,6 +427,11 @@ def process_job(job_id: str):
 # aqui encerra o worker, caso requisitado.
 def _main_loop():
     _log_structured("worker_start", {"worker_id": WORKER_ID})
+    
+    if r is None:
+        _log_structured("connection_error", {"error": "Redis client is None. Connection failed."})
+        return
+
     while not shutdown_requested:
         try:
             item = r.blpop("queue:downloads", timeout=5)

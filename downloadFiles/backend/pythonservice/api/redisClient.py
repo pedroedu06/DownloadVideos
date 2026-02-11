@@ -4,6 +4,10 @@ import os
 REDIS_HOST = os.getenv('REDIS_HOST', 'localhost')
 REDIS_PORT = int(os.getenv('REDIS_PORT', 6379))
 REDIS_PASS = os.getenv('REDIS_PASSWORD')
+if REDIS_PASS and not REDIS_PASS.strip():
+    REDIS_PASS = None
+elif not REDIS_PASS:
+    REDIS_PASS = None
 
 # Pool de conexões: reutiliza conexões TCP, evita overhead de reconexão
 _redis_pool = redis.ConnectionPool(

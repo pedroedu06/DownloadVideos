@@ -1,6 +1,7 @@
 // Prevents additional console window on Windows in release, DO NOT REMOVE!!
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
+use std::collections::HashMap;
 use std::net::TcpListener;
 use std::process::{Child, Command, Stdio};
 use std::sync::Mutex;
@@ -8,6 +9,27 @@ use tauri::{path::BaseDirectory, Manager, WindowEvent};
 use std::io::{BufRead, BufReader};
 use std::thread;
 use std::time::Instant;
+
+/// Lê um arquivo .env e retorna um HashMap com as chaves e valores.
+/// Ignora linhas vazias e comentários (que começam com #).
+fn load_env_file(path: &std::path::Path) -> HashMap<String, String> {
+    let mut map = HashMap::new();
+    if let Ok(content) = std::fs::read_to_string(path) {
+        for line in content.lines() {
+            let line = line.trim();
+            if line.is_empty() || line.starts_with('#') {
+                continue;
+            }
+            if let Some((key, value)) = line.split_once('=') {
+                map.insert(key.trim().to_string(), value.trim().to_string());
+            }
+        }
+        println!("[Tauri] .env carregado de {:?} ({} variáveis)", path, map.len());
+    } else {
+        eprintln!("[Tauri] AVISO: Não foi possível ler .env em {:?}", path);
+    }
+    map
+}
 
 #[cfg(windows)]
 use std::os::windows::process::CommandExt;
@@ -123,18 +145,26 @@ fn main() {
                 handle.path().resolve(path, BaseDirectory::Resource).unwrap()
             };
 
-            let (python_dir, node_dir) = if cfg!(debug_assertions) {
+            let (python_dir, node_dir, node_env_file) = if cfg!(debug_assertions) {
                 let mut base = std::env::current_dir().unwrap();
                 if base.ends_with("src-tauri") {
                     base = base.parent().unwrap().to_path_buf();
                 }
-                (base.join("backend/pythonservice"), base.join("backend/node_service"))
+                (
+                    base.join("backend/pythonservice"),
+                    base.join("backend/node_service"),
+                    base.join("backend/node_service/.env"),
+                )
             } else {
                 (
                     resolve_path("pythonservice"),
-                    resolve_path("node_service/dist")
+                    resolve_path("node_service/dist"),
+                    resolve_path("node_service/.env"),  // Caminho correto do recurso
                 )
             };
+
+            // Carregar variáveis do .env do Node Service
+            let node_env_vars = load_env_file(&node_env_file);
 
             let normalize = |p: std::path::PathBuf| -> String {
                 let s = p.to_string_lossy().to_string();
@@ -189,6 +219,7 @@ fn main() {
 
             let node_dir_spawn = node_dir.clone();
             let node_bin_spawn = node_bin.clone();
+            let node_env_vars_spawn = node_env_vars.clone();
 
             // Thread 1: Python API
             let api_handle = thread::spawn(move || -> Option<Child> {
@@ -213,8 +244,7 @@ fn main() {
                 }
 
                 cmd.args(["bootstrap_api.py"]);
-                cmd.env("YT_DATA_API_KEY", "AIzaSyDfSwbdyz2ureSis9Fzsa7CA-D7qG3eKK4")
-                   .env("BASE_URL", "https://www.googleapis.com/youtube/v3");
+                // As variáveis de ambiente devem ser lidas dos arquivos .env pelo próprio serviço Python
 
                 match spawn_and_log(cmd, "Python-API") {
                     Ok(child) => Some(child),
@@ -256,10 +286,12 @@ fn main() {
                     println!("[Tauri] Iniciando Node em: {:?} com script: {}", run_dir, script);
 
                     let mut cmd = Command::new(&node_bin_spawn);
-                    cmd.current_dir(&run_dir)
-                        .env("YT_DATA_API_KEY", "AIzaSyDfSwbdyz2ureSis9Fzsa7CA-D7qG3eKK4")
-                        .env("BASE_URL", "https://www.googleapis.com/youtube/v3")
-                        .args([script]);
+                    cmd.current_dir(&run_dir);
+                    // Injetar variáveis do .env lido em runtime
+                    for (key, val) in &node_env_vars_spawn {
+                        cmd.env(key, val);
+                    }
+                    cmd.args([script]);
                     cmd
                 };
 
