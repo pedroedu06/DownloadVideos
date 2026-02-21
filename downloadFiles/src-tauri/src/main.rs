@@ -200,13 +200,9 @@ fn main() {
                 normalize(resolve_path("bin/node/node.exe"))
             };
 
-            // ============================================================
-            // 2. LANÇAMENTO PARALELO DOS PROCESSOS
-            //    Os 3 processos são preparados como closures e lançados em
-            //    threads separadas para reduzir o tempo de startup.
-            // ============================================================
+            // cria processos paralelos para diminuir o tempo de start, entao ele cria clones dos processos e envia -
+            // para threads separadas assim diminuindo esse tempo.
 
-            // Clones necessários para mover para as threads
             let python_dir_api = python_dir.clone();
             let python_dir_str_api = python_dir_str.clone();
             let python_bin_dir_api = python_bin_dir.clone();

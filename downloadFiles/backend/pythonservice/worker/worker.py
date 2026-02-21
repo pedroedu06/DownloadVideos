@@ -102,7 +102,7 @@ signal.signal(signal.SIGTERM, _signal_handler)
 
 
 def process_job(job_id: str):
-    # Usar pipeline para buscar múltiplas chaves de uma vez - reduz round-trips
+    # ultilizacao de pipeline para evitar multiplos pedidos no redis, assim melhorando o desempenho e automatizando o processo de download!
     pipe = r.pipeline(transaction=False)
     pipe.get(f"download:{job_id}:user_id")
     pipe.get(f"download:{job_id}:url")
