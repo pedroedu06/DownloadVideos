@@ -8,6 +8,7 @@ from pathlib import Path
 from typing import Optional
 
 import redis
+import threading
 from yt_dlp import YoutubeDL
 
 
@@ -32,18 +33,50 @@ _redis_pool = redis.ConnectionPool(
     retry_on_timeout=True,
 )
 
-def get_redis_connection():
-    try:
-        client = redis.Redis(connection_pool=_redis_pool)
-        client.ping()
-        return client
-    except Exception as e:
-        print(f"Erro ao conectar ao Redis no Worker: {e}")
-        return None
+MAX_CONNECT_RETRIES = 30
+INITIAL_BACKOFF = 1
+MAX_BACKOFF = 10
 
+_redis_client = None
+_redis_lock = threading.Lock()
+
+
+def _connect_with_retry():
+    """Tenta conectar ao Redis com retry e backoff exponencial."""
+    backoff = INITIAL_BACKOFF
+    for attempt in range(1, MAX_CONNECT_RETRIES + 1):
+        try:
+            client = redis.Redis(connection_pool=_redis_pool)
+            client.ping()
+            print(f"[Redis-Worker] Conectado com sucesso ao Redis em {REDIS_HOST}:{REDIS_PORT} (tentativa {attempt})")
+            return client
+        except (redis.ConnectionError, redis.TimeoutError) as e:
+            if attempt == MAX_CONNECT_RETRIES:
+                print(f"[Redis-Worker] ERRO: Não foi possível conectar ao Redis após {MAX_CONNECT_RETRIES} tentativas: {e}")
+                return None
+            print(f"[Redis-Worker] Tentativa {attempt}/{MAX_CONNECT_RETRIES} falhou, aguardando {backoff}s... ({e})")
+            time.sleep(backoff)
+            backoff = min(backoff * 1.5, MAX_BACKOFF)
+    return None
+
+
+def get_redis_connection():
+    """Retorna o cliente Redis, criando conexão com retry se necessário."""
+    global _redis_client
+    with _redis_lock:
+        if _redis_client is not None:
+            try:
+                _redis_client.ping()
+                return _redis_client
+            except Exception:
+                print("[Redis-Worker] Conexão perdida, reconectando...")
+                _redis_client = None
+        _redis_client = _connect_with_retry()
+        return _redis_client
+
+
+# Conexão inicial com retry (espera o Docker subir)
 r = get_redis_connection()
-if not r:
-    print("ERRO: Não foi possível estabelecer conexão inicial com o Redis.")
 
 
 # diretório padrão de download (lido do redis se existir)
@@ -426,11 +459,16 @@ def process_job(job_id: str):
 
 # aqui encerra o worker, caso requisitado.
 def _main_loop():
+    global r
     _log_structured("worker_start", {"worker_id": WORKER_ID})
     
+
     if r is None:
-        _log_structured("connection_error", {"error": "Redis client is None. Connection failed."})
-        return
+        _log_structured("connection_retry", {"reason": "Initial connection failed, retrying..."})
+        r = get_redis_connection()
+        if r is None:
+            _log_structured("connection_error", {"error": "Redis client is None após retry. Verifique se o Docker está rodando."})
+            return
 
     while not shutdown_requested:
         try:
@@ -438,6 +476,16 @@ def _main_loop():
             if item:
                 _, job_id = item
                 process_job(job_id)
+        except (redis.ConnectionError, redis.TimeoutError) as e:
+            _log_structured("connection_lost", {"error": str(e)})
+            # Tenta reconectar
+            r = get_redis_connection()
+            if r is None:
+                _log_structured("reconnect_failed", {"error": "Não foi possível reconectar ao Redis"})
+                time.sleep(5)
+                r = get_redis_connection()  # tenta mais uma vez
+                if r is None:
+                    break
         except Exception as e:
             _log_structured("loop_exception", {"error": str(e)})
             time.sleep(1)
@@ -447,3 +495,4 @@ def _main_loop():
 
 if __name__ == "__main__":
     _main_loop()
+

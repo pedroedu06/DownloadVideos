@@ -1,5 +1,7 @@
 import redis
 import os
+import time
+import threading
 
 REDIS_HOST = os.getenv('REDIS_HOST', 'localhost')
 REDIS_PORT = int(os.getenv('REDIS_PORT', 6379))
@@ -21,13 +23,49 @@ _redis_pool = redis.ConnectionPool(
     retry_on_timeout=True,
 )
 
+# Retry com backoff exponencial para esperar o Redis (Docker) ficar pronto
+MAX_RETRIES = 30          # tenta por até ~2 minutos
+INITIAL_BACKOFF = 1       # começa com 1 segundo
+MAX_BACKOFF = 10          # máximo 10 segundos entre tentativas
+
+_redis_client = None
+_redis_lock = threading.Lock()
+
+
+def _connect_with_retry():
+    """Tenta conectar ao Redis com retry e backoff exponencial."""
+    backoff = INITIAL_BACKOFF
+    for attempt in range(1, MAX_RETRIES + 1):
+        try:
+            client = redis.Redis(connection_pool=_redis_pool)
+            client.ping()
+            print(f"[Redis] Conectado com sucesso ao Redis em {REDIS_HOST}:{REDIS_PORT} (tentativa {attempt})")
+            return client
+        except (redis.ConnectionError, redis.TimeoutError) as e:
+            if attempt == MAX_RETRIES:
+                print(f"[Redis] ERRO: Não foi possível conectar ao Redis após {MAX_RETRIES} tentativas: {e}")
+                return None
+            print(f"[Redis] Tentativa {attempt}/{MAX_RETRIES} falhou, aguardando {backoff}s... ({e})")
+            time.sleep(backoff)
+            backoff = min(backoff * 1.5, MAX_BACKOFF)
+    return None
+
+
 def get_redis():
-    try:
-        r = redis.Redis(connection_pool=_redis_pool)
-        r.ping()
-        return r
-    except redis.ConnectionError as e:
-        print(f"falha ao conectar ao redis", e)
-        return None
- 
+    """Retorna o cliente Redis, criando conexão com retry se necessário."""
+    global _redis_client
+    with _redis_lock:
+        if _redis_client is not None:
+            try:
+                _redis_client.ping()
+                return _redis_client
+            except Exception:
+                print("[Redis] Conexão perdida, reconectando...")
+                _redis_client = None
+
+        _redis_client = _connect_with_retry()
+        return _redis_client
+
+
+# Conexão inicial com retry (espera o Docker subir)
 redisClient = get_redis()

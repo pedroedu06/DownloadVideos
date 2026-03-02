@@ -1,7 +1,7 @@
-from fastapi import FastAPI, Body, HTTPException
+from fastapi import FastAPI, Body, HTTPException, Depends
 from fastapi.middleware.cors import CORSMiddleware
 from uuid import uuid4
-from api.redisClient import redisClient
+from api.redisClient import redisClient, get_redis
 from api.schemas import DownloadRequest, DownloadStatus, DownloadDIR, DownloadInfo
 from typing import List
 import json
@@ -19,9 +19,38 @@ class ProgressManager:
             return 0.0
 
 
-progress_manager = ProgressManager(redisClient)
-
 app = FastAPI()
+
+
+# Garante que o Redis esteja disponível antes de cada request
+def require_redis():
+    r = get_redis()
+    if r is None:
+        raise HTTPException(status_code=503, detail="Redis não está disponível. Verifique se o Docker está rodando.")
+    return r
+
+@app.on_event("startup")
+async def startup_reconnect():
+    global redisClient
+    if redisClient is None:
+        print("[API] Redis não conectado na inicialização, tentando novamente...")
+        from api.redisClient import get_redis as _get
+        redisClient = _get()
+        if redisClient:
+            print("[API] Redis reconectado com sucesso no startup!")
+        else:
+            print("[API] AVISO: Redis ainda não disponível. As rotas retornarão 503 até que o Redis esteja pronto.")
+
+
+progress_manager = None
+
+@app.on_event("startup")
+async def init_progress_manager():
+    global progress_manager
+    r = get_redis()
+    if r:
+        progress_manager = ProgressManager(r)
+
 
 # CORS
 app.add_middleware(
@@ -34,11 +63,11 @@ app.add_middleware(
 
 # Aqui é o coração do projeto (o seu intuito.)
 @app.post("/downloadtask")
-def create_download(data: DownloadRequest):
+def create_download(data: DownloadRequest, r = Depends(require_redis)):
     job_id = str(uuid4())
 
     # Usa pipeline para agrupar todas as operações em um único round-trip
-    pipe = redisClient.pipeline(transaction=False)
+    pipe = r.pipeline(transaction=False)
     pipe.set(f"download:{job_id}:type", data.type)
     pipe.set(f"download:{job_id}:status", "queued")
     pipe.set(f"download:{job_id}:progress", 0)
@@ -60,9 +89,9 @@ def create_download(data: DownloadRequest):
 
 # aqui ele retorna status, progresso do job_id do worker
 @app.get("/downloadStatus/{job_id}", response_model=DownloadStatus)
-def get_status(job_id: str):
+def get_status(job_id: str, r = Depends(require_redis)):
     # Pipeline: busca status e progresso em um único round-trip
-    pipe = redisClient.pipeline(transaction=False)
+    pipe = r.pipeline(transaction=False)
     pipe.get(f"download:{job_id}:status")
     pipe.get(f"download:{job_id}:progress")
     results = pipe.execute()
@@ -81,8 +110,8 @@ def get_status(job_id: str):
 
 # aqui ele cancela o download e retorna o status de 'cancelled'
 @app.post("/downloadCancel/{job_id}")
-def cancel_download(job_id: str):
-    pipe = redisClient.pipeline(transaction=False)
+def cancel_download(job_id: str, r = Depends(require_redis)):
+    pipe = r.pipeline(transaction=False)
     pipe.set(f"download:{job_id}:cancel", "1")
     pipe.set(f"download:{job_id}:status", "cancelled")
     pipe.set(f"download:{job_id}:progress", 0)
@@ -90,13 +119,13 @@ def cancel_download(job_id: str):
     return {"job_id": job_id, "cancelled": True}
 
 @app.post('/downloadPath')
-def downloadsetPath(data: DownloadDIR):
-    redisClient.set('download:dir', data.path)
+def downloadsetPath(data: DownloadDIR, r = Depends(require_redis)):
+    r.set('download:dir', data.path)
     return {"status": "ok"} 
 
 
 @app.post('/downloadSettings')
-def set_download_settings(settings: dict = Body(...)):
+def set_download_settings(r = Depends(require_redis), settings: dict = Body(...)):
     mapping = {
         'default_video_format': 'settings:default:video_format',
         'default_audio_format': 'settings:default:audio_format',
@@ -105,7 +134,7 @@ def set_download_settings(settings: dict = Body(...)):
     }
 
     # Pipeline para salvar todas as configurações de uma vez
-    pipe = redisClient.pipeline(transaction=False)
+    pipe = r.pipeline(transaction=False)
     for k, v in settings.items():
         if k in mapping and v is not None:
             pipe.set(mapping[k], str(v))
@@ -115,13 +144,13 @@ def set_download_settings(settings: dict = Body(...)):
 
 
 @app.get('/list_downloads', response_model=List[DownloadInfo])
-def list_downloads():
-    ids = redisClient.smembers('downloads:completed') or []
+def list_downloads(r = Depends(require_redis)):
+    ids = r.smembers('downloads:completed') or []
     if not ids:
         return []
     
     # Pipeline: buscar todas as infos de uma vez
-    pipe = redisClient.pipeline(transaction=False)
+    pipe = r.pipeline(transaction=False)
     for job_id in ids:
         pipe.get(f"download:{job_id}:info")
     raw_results = pipe.execute()
@@ -135,7 +164,7 @@ def list_downloads():
                 info = {"job_id": job_id, "title": "Error parsing metadata"}
         else:
             # Fallback: buscar campos individuais via pipeline
-            fb_pipe = redisClient.pipeline(transaction=False)
+            fb_pipe = r.pipeline(transaction=False)
             fb_pipe.get(f"download:{job_id}:id")
             fb_pipe.get(f"download:{job_id}:title")
             fb_pipe.get(f"download:{job_id}:type")
@@ -156,13 +185,13 @@ def list_downloads():
     return results
     
 @app.get('/userDownload/{user_id}/downloads')  
-def list_user_downloads(user_id: str):
-    ids = redisClient.smembers(f"user:{user_id}:downloads:completed") or []
+def list_user_downloads(user_id: str, r = Depends(require_redis)):
+    ids = r.smembers(f"user:{user_id}:downloads:completed") or []
     if not ids:
         return []
     
     # Pipeline: buscar todas as infos de uma vez
-    pipe = redisClient.pipeline(transaction=False)
+    pipe = r.pipeline(transaction=False)
     for job_id in ids:
         pipe.get(f"download:{job_id}:info")
     raw_results = pipe.execute()
@@ -182,17 +211,17 @@ def list_user_downloads(user_id: str):
     return resultsUser
 
 @app.post('/deletCache')
-def clear_cache():
-    keys = redisClient.keys("cache:*")
+def clear_cache(r = Depends(require_redis)):
+    keys = r.keys("cache:*")
     if keys:
-        redisClient.delete(*keys)
+        r.delete(*keys)
 
     return {"status": "ok"}
 
 @app.post('/deletuserSettings')
-def clear_settings():
-    keys = redisClient.keys("settings:*")
+def clear_settings(r = Depends(require_redis)):
+    keys = r.keys("settings:*")
     if keys:
-        redisClient.delete(*keys)
+        r.delete(*keys)
 
     return {"status": "ok"}
