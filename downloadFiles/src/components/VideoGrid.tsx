@@ -26,7 +26,7 @@ const VideoGrid: React.FC<VideoDownloadGrid> = ({ onClickDownload }) => {
 
         const fetchFeed = async () => {
             try {
-                const response = await fetch('http://localhost:3000/feed', {
+                const response = await fetch('http://localhost:8000/feed', {
                     signal: controller.signal
                 });
                 const dataVideos = await response.json();

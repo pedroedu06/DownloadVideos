@@ -1,10 +1,16 @@
-from fastapi import FastAPI, Body, HTTPException, Depends
+from datetime import datetime, timezone
+from fastapi import FastAPI, Body, HTTPException, Depends, Request
 from fastapi.middleware.cors import CORSMiddleware
 from uuid import uuid4
 from api.redisClient import redisClient, get_redis
-from api.schemas import DownloadRequest, DownloadStatus, DownloadDIR, DownloadInfo
-from typing import List
+from api.schemas import DownloadRequest, DownloadStatus, DownloadDIR, DownloadInfo, CacheEntry
+from typing import List, Optional
 import json
+from api.configYt import getvideos
+from api.configrecomendedvideos import recommendVideos
+from api.extractIdVideo import extractVideoId
+from api.getVideos import getInfosVideo
+import asyncio
 
 # aqui encapsula os valores de progresso do download do redis, assim facilita reutilizar em outros lugares
 class ProgressManager:
@@ -61,7 +67,81 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Aqui é o coração do projeto (o seu intuito.)
+CACHE_TTL_MS = 5 * 60 * 1000
+
+feed_cache: Optional[dict] = None
+
+@app.get("/feed")
+async def getFeed():
+    global feed_cache
+    try:
+        now = int(datetime.now(timezone.utc).timestamp() * 1000)
+        if feed_cache and (now - feed_cache["timestamp"]) < CACHE_TTL_MS:
+            return feed_cache["data"]
+        
+        videoInfo = await getvideos()
+        recomendedVideos = recommendVideos(videoInfo)
+
+        feed_cache = {"data": [v.__dict__ for v in recomendedVideos], "timestamp": now}
+
+        return feed_cache["data"]
+
+    except Exception as error:
+        print(f"log error: {error}")
+        raise HTTPException(status_code=500, detail="erro ao buscar os videos")
+
+
+VIDEO_CACHE_TTL_MS = 30 * 60 * 1000
+videoInfoCache: dict = {}
+
+async def clear_cache():
+    while True:
+        await asyncio.sleep(10 * 60)
+        now = int(datetime.now(timezone.utc).timestamp() * 1000)
+
+        keys_to_delete = [
+            key for key, entry in videoInfoCache.items()
+            if (now - entry["timestamp"]) > VIDEO_CACHE_TTL_MS
+        ]
+
+        for key in keys_to_delete:
+            del videoInfoCache[key]
+
+@app.post('/getInfoVideo')
+async def getinfoVideo(request: Request):
+    try:
+        body = await request.json()
+        url = body.get('url')
+
+        if not url:
+            raise HTTPException(status_code=400, detail="url nao e valida")
+
+        videoId = extractVideoId(url)
+        if not videoId:
+            raise HTTPException(status_code=400, detail="URL inválida")
+
+        now = int(datetime.now(timezone.utc).timestamp() * 1000)
+        cached = videoInfoCache.get(videoId)
+        if cached and (now - cached["timestamp"]) < VIDEO_CACHE_TTL_MS:
+            return cached["data"]
+
+        previwInfo = await getInfosVideo(videoId)
+
+        videoInfoCache[videoId] = {"data": previwInfo, "timestamp": now}
+
+        return previwInfo
+
+    except HTTPException:
+        raise
+    except Exception as error:
+        if hasattr(error, 'response') and error.response.status_code == 403:
+            print("YouTube bloqueou a requisição (provável limite de API ou IP)")
+        else:
+            print(f"Erro no /getInfoVideo: {error}")
+            
+        raise HTTPException(status_code=500, detail="Falha ao obter as informações do vídeo")
+
+# Aqui é o coração do projeto
 @app.post("/downloadtask")
 def create_download(data: DownloadRequest, r = Depends(require_redis)):
     job_id = str(uuid4())

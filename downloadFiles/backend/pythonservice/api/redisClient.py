@@ -4,7 +4,7 @@ import time
 import threading
 
 REDIS_HOST = os.getenv('REDIS_HOST', 'localhost')
-REDIS_PORT = int(os.getenv('REDIS_PORT', 6379))
+REDIS_PORT = int(os.getenv('REDIS_PORT', 6590))
 REDIS_PASS = os.getenv('REDIS_PASSWORD')
 if REDIS_PASS and not REDIS_PASS.strip():
     REDIS_PASS = None

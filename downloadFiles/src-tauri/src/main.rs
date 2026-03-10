@@ -1,7 +1,6 @@
 // Prevents additional console window on Windows in release, DO NOT REMOVE!!
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
-use std::collections::HashMap;
 use std::net::TcpListener;
 use std::process::{Child, Command, Stdio};
 use std::sync::Mutex;
@@ -9,27 +8,6 @@ use tauri::{path::BaseDirectory, Manager, WindowEvent};
 use std::io::{BufRead, BufReader};
 use std::thread;
 use std::time::Instant;
-
-/// Lê um arquivo .env e retorna um HashMap com as chaves e valores.
-/// Ignora linhas vazias e comentários (que começam com #).
-fn load_env_file(path: &std::path::Path) -> HashMap<String, String> {
-    let mut map = HashMap::new();
-    if let Ok(content) = std::fs::read_to_string(path) {
-        for line in content.lines() {
-            let line = line.trim();
-            if line.is_empty() || line.starts_with('#') {
-                continue;
-            }
-            if let Some((key, value)) = line.split_once('=') {
-                map.insert(key.trim().to_string(), value.trim().to_string());
-            }
-        }
-        println!("[Tauri] .env carregado de {:?} ({} variáveis)", path, map.len());
-    } else {
-        eprintln!("[Tauri] AVISO: Não foi possível ler .env em {:?}", path);
-    }
-    map
-}
 
 #[cfg(windows)]
 use std::os::windows::process::CommandExt;
@@ -40,7 +18,6 @@ const CREATE_NO_WINDOW: u32 = 0x08000000;
 struct BackendProcess {
     api: Option<Child>,
     worker: Option<Child>,
-    node: Option<Child>,
 }
 
 fn is_port_free(port: u16) -> bool {
@@ -55,12 +32,10 @@ impl BackendProcess {
         // Mata todos os processos em paralelo usando threads
         let api = self.api.take();
         let worker = self.worker.take();
-        let node = self.node.take();
 
         let handles: Vec<_> = [
             ("API", api),
             ("Worker", worker),
-            ("Node", node),
         ]
         .into_iter()
         .filter_map(|(name, child)| {
@@ -127,7 +102,6 @@ fn main() {
         .manage(Mutex::new(BackendProcess {
             api: None,
             worker: None,
-            node: None,
         }))
         .setup(|app| {
             let startup_time = Instant::now();
@@ -145,26 +119,15 @@ fn main() {
                 handle.path().resolve(path, BaseDirectory::Resource).unwrap()
             };
 
-            let (python_dir, node_dir, node_env_file) = if cfg!(debug_assertions) {
+            let python_dir = if cfg!(debug_assertions) {
                 let mut base = std::env::current_dir().unwrap();
                 if base.ends_with("src-tauri") {
                     base = base.parent().unwrap().to_path_buf();
                 }
-                (
-                    base.join("backend/pythonservice"),
-                    base.join("backend/node_service"),
-                    base.join("backend/node_service/.env"),
-                )
+                base.join("backend/pythonservice")
             } else {
-                (
-                    resolve_path("pythonservice"),
-                    resolve_path("node_service/dist"),
-                    resolve_path("node_service/.env"),  // Caminho correto do recurso
-                )
+                resolve_path("pythonservice")
             };
-
-            // Carregar variáveis do .env do Node Service
-            let node_env_vars = load_env_file(&node_env_file);
 
             let normalize = |p: std::path::PathBuf| -> String {
                 let s = p.to_string_lossy().to_string();
@@ -177,10 +140,8 @@ fn main() {
             };
 
             let python_dir_str = normalize(python_dir.clone());
-            let node_dir_str = normalize(node_dir.clone());
 
             println!("[Tauri] Python Dir: {}", python_dir_str);
-            println!("[Tauri] Node Dir: {}", node_dir_str);
 
             let python_bin_dir = if cfg!(debug_assertions) {
                 "".to_string()
@@ -192,12 +153,6 @@ fn main() {
                 "python".to_string()
             } else {
                 normalize(resolve_path("bin/python/python.exe"))
-            };
-
-            let node_bin = if cfg!(debug_assertions) {
-                "node".to_string()
-            } else {
-                normalize(resolve_path("bin/node/node.exe"))
             };
 
             // cria processos paralelos para diminuir o tempo de start, entao ele cria clones dos processos e envia -
@@ -212,10 +167,6 @@ fn main() {
             let python_dir_str_worker = python_dir_str.clone();
             let python_bin_dir_worker = python_bin_dir.clone();
             let python_bin_worker = python_bin.clone();
-
-            let node_dir_spawn = node_dir.clone();
-            let node_bin_spawn = node_bin.clone();
-            let node_env_vars_spawn = node_env_vars.clone();
 
             // Thread 1: Python API
             let api_handle = thread::spawn(move || -> Option<Child> {
@@ -251,56 +202,7 @@ fn main() {
                 }
             });
 
-            // Thread 2: Node Service
-            let node_handle = thread::spawn(move || -> Option<Child> {
-                if !node_dir_spawn.exists() {
-                    eprintln!("[Tauri] Erro: Diretório do Node Service não encontrado em {:?}", node_dir_spawn);
-                    return None;
-                }
-                if !is_port_free(3000) {
-                    eprintln!("[Tauri] AVISO: Porta 3000 já está em uso. Assumindo que o Node Service já está rodando.");
-                    return None;
-                }
-
-                let node_cmd = if cfg!(debug_assertions) {
-                    let mut cmd = Command::new("cmd");
-                    cmd.current_dir(&node_dir_spawn).args(["/c", "npx", "ts-node", "server.ts"]);
-                    cmd
-                } else {
-                    let (run_dir, script) = if node_dir_spawn.join("index.js").exists() {
-                        (node_dir_spawn.clone(), "index.js")
-                    } else if node_dir_spawn.join("server.js").exists() {
-                        (node_dir_spawn.clone(), "server.js")
-                    } else if node_dir_spawn.join("dist/index.js").exists() {
-                        (node_dir_spawn.join("dist"), "index.js")
-                    } else if node_dir_spawn.join("dist/server.js").exists() {
-                        (node_dir_spawn.join("dist"), "server.js")
-                    } else {
-                        (node_dir_spawn.clone(), "server.js")
-                    };
-
-                    println!("[Tauri] Iniciando Node em: {:?} com script: {}", run_dir, script);
-
-                    let mut cmd = Command::new(&node_bin_spawn);
-                    cmd.current_dir(&run_dir);
-                    // Injetar variáveis do .env lido em runtime
-                    for (key, val) in &node_env_vars_spawn {
-                        cmd.env(key, val);
-                    }
-                    cmd.args([script]);
-                    cmd
-                };
-
-                match spawn_and_log(node_cmd, "Node-Service") {
-                    Ok(child) => Some(child),
-                    Err(e) => {
-                        eprintln!("[Tauri] Falha CRÍTICA ao iniciar Node-Service: {}. Pasta: {:?}", e, node_dir_spawn);
-                        None
-                    }
-                }
-            });
-
-            // Thread 3: Python Worker
+            // Thread 2: Python Worker
             let worker_handle = thread::spawn(move || -> Option<Child> {
                 if !python_dir_worker.exists() {
                     eprintln!("[Tauri] Erro: Diretório do Worker Python não encontrado em {:?}", python_dir_worker);
@@ -338,7 +240,6 @@ fn main() {
             // Aguarda todas as threads finalizarem e coleta os resultados
             let mut processes = state.lock().unwrap();
             processes.api = api_handle.join().unwrap_or(None);
-            processes.node = node_handle.join().unwrap_or(None);
             processes.worker = worker_handle.join().unwrap_or(None);
 
             println!("[Tauri] Todos os backends iniciados em {:?}", startup_time.elapsed());

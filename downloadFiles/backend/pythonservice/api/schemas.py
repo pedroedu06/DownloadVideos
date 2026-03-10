@@ -24,3 +24,7 @@ class DownloadInfo(BaseModel):
     size: Optional[int] = None
     type: Optional[str] = None
     created_at: Optional[str] = None
+
+class CacheEntry(BaseModel):
+    data: str
+    timestamp: int

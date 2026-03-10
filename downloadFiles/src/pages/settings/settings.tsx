@@ -139,7 +139,7 @@ const Settings = () => {
                 .then(() => {
                     notifySuccess("Dados limpos com sucesso!");
                 })
-                .catch(err => {
+                .catch( err => {
                     console.error("Erro ao deletar configurações:", err);
                     notifyError("Erro ao limpar dados.");
                 })

@@ -37,11 +37,10 @@
       "icons/icon.icns",
       "icons/icon.ico"
     ],
+    
     "resources": [
       "../backend/bin",
-      "../backend/pythonservice",
-      "../backend/node_service/dist",
-      "../backend/node_service/.env"
+      "../backend/pythonservice"
     ]
   }
 }

@@ -47,7 +47,7 @@ const Home: React.FC = () => {
   const handlePreviewDownload = async () => {
     if (!link) return;
     try {
-      const res = await axios.post('http://localhost:3000/getInfoVideo', { url: link });
+      const res = await axios.post('http://localhost:8000/getInfoVideo', { url: link });
       const title = res.data.title || 'unknown';
       const thumbnail = res.data.thumbnail || null;
       setCurrentPreview({ title, thumbnail });
