@@ -1,7 +1,7 @@
-# Tauri + React + Typescript
+# DownloadFiles App
 
-This template should help get you started developing with Tauri, React and Typescript in Vite.
+The main project documentation lives in the repository root:
 
-## Recommended IDE Setup
+- [../README.md](../README.md)
 
-- [VS Code](https://code.visualstudio.com/) + [Tauri](https://marketplace.visualstudio.com/items?itemName=tauri-apps.tauri-vscode) + [rust-analyzer](https://marketplace.visualstudio.com/items?itemName=rust-lang.rust-analyzer)
+That file contains the technical architecture, runtime flow, SQLite queue model, WebSocket progress design, worker internals, API endpoints, and development notes for this application.

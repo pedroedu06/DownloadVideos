@@ -1,7 +1,8 @@
 import { useEffect, useState } from 'react';
-import './CardDownloadprogress.css'
-import { IoMdClose } from "react-icons/io";
 import axios from 'axios';
+import { IoMdClose } from "react-icons/io";
+
+import './CardDownloadprogress.css';
 
 type Props = {
     job_id: string;
@@ -10,52 +11,103 @@ type Props = {
     onClose: (id: string) => void;
 }
 
+type DownloadProgressEvent = {
+    job_id: string;
+    status?: string;
+    progress?: number;
+    error?: string | null;
+}
+
+const TERMINAL_STATUSES = new Set(["done", "failed", "cancelled"]);
+
 const CardDownloadprogress: React.FC<Props> = ({ job_id, title, thumbnail, onClose }) => {
     const [progress, setProgress] = useState<number>(0);
     const [status, setStatus] = useState<string>("queued");
 
-    // Efeito único para polling de status e encerramento (Single source of truth)
     useEffect(() => {
         const controller = new AbortController();
-        
-        const fetchStatus = async () => {
+        let socket: WebSocket | null = null;
+        let reconnectTimer: number | null = null;
+        let disposed = false;
+        let terminal = false;
+
+        const applyEvent = (event: DownloadProgressEvent) => {
+            if (typeof event.progress === "number") {
+                setProgress(event.progress);
+            }
+
+            if (typeof event.status === "string") {
+                setStatus(event.status);
+
+                if (TERMINAL_STATUSES.has(event.status)) {
+                    terminal = true;
+                    if (event.status === "done") {
+                        onClose(job_id);
+                    }
+                }
+            }
+        };
+
+        const fetchInitialStatus = async () => {
             try {
                 const res = await axios.get(`http://localhost:8000/downloadStatus/${job_id}`, {
                     signal: controller.signal
                 });
-                
-                const data = res.data;
-                setProgress(data.progress);
-                setStatus(data.status);
-
-                if (data.status === "done" || data.status === "failed") {
-                    if (data.status === "done") {
-                        onClose(job_id);
-                    }
-                    return true; // Para o polling
-                }
-            } catch (err) {
-                if (!axios.isCancel(err)) {
-                    console.error("Erro ao buscar status de download:", err);
-                    return true; // Para o polling em caso de erro crítico
+                applyEvent(res.data);
+            } catch (error) {
+                if (!axios.isCancel(error)) {
+                    console.error("Erro ao buscar status inicial do download:", error);
                 }
             }
-            return false;
         };
 
-        const intervalId = setInterval(async () => {
-            const shouldStop = await fetchStatus();
-            if (shouldStop) {
-                clearInterval(intervalId);
+        const connectSocket = () => {
+            if (disposed || terminal) {
+                return;
             }
-        }, 1000);
 
-        // Executa a primeira vez imediatamente
-        fetchStatus();
+            socket = new WebSocket(`ws://localhost:8000/ws/downloads/${job_id}`);
+
+            socket.onmessage = (message) => {
+                try {
+                    const data = JSON.parse(message.data) as DownloadProgressEvent;
+                    applyEvent(data);
+
+                    if (terminal && socket?.readyState === WebSocket.OPEN) {
+                        socket.close();
+                    }
+                } catch (error) {
+                    console.error("Erro ao processar evento do WebSocket:", error);
+                }
+            };
+
+            socket.onerror = () => {
+                if (socket && socket.readyState < WebSocket.CLOSING) {
+                    socket.close();
+                }
+            };
+
+            socket.onclose = () => {
+                if (!disposed && !terminal) {
+                    reconnectTimer = window.setTimeout(connectSocket, 1000);
+                }
+            };
+        };
+
+        fetchInitialStatus();
+        connectSocket();
 
         return () => {
+            disposed = true;
             controller.abort();
-            clearInterval(intervalId);
+
+            if (reconnectTimer !== null) {
+                window.clearTimeout(reconnectTimer);
+            }
+
+            if (socket && socket.readyState < WebSocket.CLOSING) {
+                socket.close();
+            }
         };
     }, [job_id, onClose]);
 
@@ -77,8 +129,8 @@ const CardDownloadprogress: React.FC<Props> = ({ job_id, title, thumbnail, onClo
                     <button className='cv-close-item' onClick={async () => {
                         try {
                             await axios.post(`http://localhost:8000/downloadCancel/${job_id}`);
-                        } catch (err) {
-                            console.error('Erro ao cancelar download:', err);
+                        } catch (error) {
+                            console.error('Erro ao cancelar download:', error);
                         }
                         onClose(job_id);
                     }} aria-label="fechar">
@@ -94,7 +146,7 @@ const CardDownloadprogress: React.FC<Props> = ({ job_id, title, thumbnail, onClo
                                 width: `${progress}%`,
                                 background:
                                     status === "failed" ? "#ef4444" :
-                                        "#22c55e" 
+                                        "#22c55e"
                             }}
                         />
                     </div>

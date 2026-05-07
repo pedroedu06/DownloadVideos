@@ -31,7 +31,7 @@ const ModalSelectedFormat: React.FC<ModalProps> = ({isOpen, onClose, onConfirm})
                         <input type="radio" name="format" id="audio" checked={type === 'audio'} onChange={() => setType('audio')} />
                     </label>
                 </div>
-                <button className='downloadBtn' onClick={() => {onConfirm(type)}}>Baixar</button>
+                <button className='downloadBtn' disabled={!type} onClick={() => {onConfirm(type)}}>Baixar</button>
             </div>
         </div>
     )

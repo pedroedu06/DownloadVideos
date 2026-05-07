@@ -1,6 +1,7 @@
 // Prevents additional console window on Windows in release, DO NOT REMOVE!!
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
+
 use std::net::TcpListener;
 use std::process::{Child, Command, Stdio};
 use std::sync::Mutex;
@@ -182,6 +183,7 @@ fn main() {
                 let mut cmd = Command::new(&python_bin_api);
                 cmd.current_dir(&python_dir_api);
                 cmd.env("PYTHONPATH", &python_dir_str_api);
+                cmd.env("PYTHONDONTWRITEBYTECODE", "1");
 
                 if !python_bin_dir_api.is_empty() {
                     cmd.env("PYTHONHOME", &python_bin_dir_api);
@@ -218,6 +220,7 @@ fn main() {
                     format!("{}/python312.zip", python_bin_dir_worker),
                 ];
                 worker_cmd.env("PYTHONPATH", python_path.join(";"));
+                worker_cmd.env("PYTHONDONTWRITEBYTECODE", "1");
 
                 if !python_bin_dir_worker.is_empty() {
                     worker_cmd.env("PYTHONHOME", &python_bin_dir_worker);

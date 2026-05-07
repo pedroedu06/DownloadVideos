@@ -1,14 +1,12 @@
 ### API
 
-Aqui e a api que inicia o Worker, a base dela e usando a blibioteca do python FastApi, uma forma leve de iniciar as features e retornar infos pro front-end
+Esta API FastAPI agora usa SQLite como fonte unica de estado.
 
-algumas infos basicas do main.py
+- `/downloadtask`: cria um job na fila persistida em SQLite.
+- `/downloadStatus/{job_id}`: retorna o status atual salvo no banco.
+- `/ws/downloads/{job_id}`: envia progresso em tempo real para o front via WebSocket.
+- `/downloadCancel/{job_id}`: marca cancelamento no banco para o worker interromper o job.
+- `/downloadPath` e `/downloadSettings`: salvam configuracoes persistidas em SQLite.
+- `/userDownload/{user_id}/downloads`: retorna o historico concluido do usuario.
 
-- /downloadTask: Cria a task do download colocando as infos principais no redis e assim baixando o video
-- /downloadStatus: Retorna infos de status e progresso
-- /downloadCancel: Coloca um gatilho de cancel no Redis assim ele cancela o download.
-- /downloadPath: Mapeia o path do usuario para colocar os downloads
-- /downloadSettings: Mapeia os formatos e qualidades de videos e audios preferidos do usuario, caso o usuario deixe no automatico ele seguirar com o formato e qualidade padrao. 
-
-alem disso nessa pasta temos os Schemas, importantes para o FastApi, e o redisClient que faz a coneccao do python com Redis.
-
+O worker le a mesma base SQLite para buscar jobs pendentes, atualizar progresso e salvar o historico final.

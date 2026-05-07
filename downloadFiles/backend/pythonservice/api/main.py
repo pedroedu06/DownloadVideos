@@ -1,64 +1,204 @@
+from __future__ import annotations
+
+import asyncio
+from contextlib import suppress
 from datetime import datetime, timezone
-from fastapi import FastAPI, Body, HTTPException, Depends, Request
-from fastapi.middleware.cors import CORSMiddleware
+from typing import Any, Optional
 from uuid import uuid4
-from api.redisClient import redisClient, get_redis
-from api.schemas import DownloadRequest, DownloadStatus, DownloadDIR, DownloadInfo, CacheEntry
-from typing import List, Optional
-import json
+
+from fastapi import Depends, FastAPI, HTTPException, Request, WebSocket, WebSocketDisconnect
+from fastapi.middleware.cors import CORSMiddleware
+
 from api.configYt import getvideos
 from api.configrecomendedvideos import recommendVideos
 from api.extractIdVideo import extractVideoId
 from api.getVideos import getInfosVideo
-import asyncio
+from api.schemas import DownloadDIR, DownloadInfo, DownloadRequest, DownloadSettings, DownloadStatus
+from api.sqliteClient import clear_settings, create_table, get_db, set_setting
+CACHE_TTL_MS = 5 * 60 * 1000
+VIDEO_CACHE_TTL_MS = 30 * 60 * 1000
 
-# aqui encapsula os valores de progresso do download do redis, assim facilita reutilizar em outros lugares
+
+def _utc_ms() -> int:
+    return int(datetime.now(timezone.utc).timestamp() * 1000)
+
+
+def _progress_payload(row: Any, job_id: Optional[str] = None) -> dict[str, Any]:
+    if row is None:
+        return {
+            "job_id": job_id,
+            "status": "queued",
+            "progress": 0.0,
+            "error": None,
+            "title": None,
+        }
+
+    return {
+        "job_id": row["job_id"],
+        "status": row["status"],
+        "progress": float(row["progress"] or 0),
+        "error": row["error"],
+        "title": row["title"],
+    }
+
+
 class ProgressManager:
-    def __init__(self, redis_client):
-        self._r = redis_client
+    def __init__(self, poll_interval: float = 0.35):
+        self._connections: dict[str, set[WebSocket]] = {}
+        self._last_payloads: dict[str, dict[str, Any]] = {}
+        self._poll_interval = poll_interval
+        self._watcher: Optional[asyncio.Task[None]] = None
 
-    def get_progress(self, job_id: str) -> float:
-        raw = self._r.get(f"download:{job_id}:progress")
-        try:
-            return float(raw or 0)
-        except Exception:
-            return 0.0
+    async def start(self) -> None:
+        if self._watcher is None or self._watcher.done():
+            self._watcher = asyncio.create_task(self._watch())
+
+    async def stop(self) -> None:
+        if self._watcher is None:
+            return
+
+        self._watcher.cancel()
+        with suppress(asyncio.CancelledError):
+            await self._watcher
+        self._watcher = None
+
+    async def connect(self, job_id: str, websocket: WebSocket) -> None:
+        await websocket.accept()
+        self._connections.setdefault(job_id, set()).add(websocket)
+
+        row = get_db().execute(
+            """
+            SELECT job_id, status, progress, error, title
+            FROM downloads
+            WHERE job_id = ?
+            """,
+            (job_id,),
+        ).fetchone()
+
+        payload = _progress_payload(row, job_id)
+        self._last_payloads[job_id] = payload
+        await websocket.send_json(payload)
+
+    def disconnect(self, job_id: str, websocket: WebSocket) -> None:
+        sockets = self._connections.get(job_id)
+        if not sockets:
+            return
+
+        sockets.discard(websocket)
+
+        if not sockets:
+            self._connections.pop(job_id, None)
+            self._last_payloads.pop(job_id, None)
+
+    async def _broadcast(self, job_id: str, payload: dict[str, Any]) -> None:
+        stale: list[WebSocket] = []
+
+        for websocket in list(self._connections.get(job_id, set())):
+            try:
+                await websocket.send_json(payload)
+            except Exception:
+                stale.append(websocket)
+
+        for websocket in stale:
+            self.disconnect(job_id, websocket)
+
+    async def _watch(self) -> None:
+        while True:
+            await asyncio.sleep(self._poll_interval)
+
+            job_ids = list(self._connections.keys())
+            if not job_ids:
+                continue
+
+            placeholders = ",".join("?" for _ in job_ids)
+            rows = get_db().execute(
+                f"""
+                SELECT job_id, status, progress, error, title
+                FROM downloads
+                WHERE job_id IN ({placeholders})
+                """,
+                job_ids,
+            ).fetchall()
+
+            payloads = {
+                row["job_id"]: _progress_payload(row)
+                for row in rows
+            }
+
+            for job_id in job_ids:
+                payload = payloads.get(job_id, _progress_payload(None, job_id))
+                previous = self._last_payloads.get(job_id)
+
+                if previous != payload:
+                    self._last_payloads[job_id] = payload
+                    await self._broadcast(job_id, payload)
 
 
 app = FastAPI()
+progress_manager = ProgressManager()
+feed_cache: Optional[dict[str, Any]] = None
+video_info_cache: dict[str, dict[str, Any]] = {}
 
 
-# Garante que o Redis esteja disponível antes de cada request
-def require_redis():
-    r = get_redis()
-    if r is None:
-        raise HTTPException(status_code=503, detail="Redis não está disponível. Verifique se o Docker está rodando.")
-    return r
+def require_db():
+    try:
+        db = get_db()
+        db.execute("SELECT 1")
+        return db
+    except Exception as error:
+        raise HTTPException(status_code=503, detail=f"Banco indisponivel: {error}") from error
+
+
+async def trim_video_info_cache() -> None:
+    while True:
+        await asyncio.sleep(10 * 60)
+        now = _utc_ms()
+
+        stale_keys = [
+            key for key, entry in video_info_cache.items()
+            if (now - entry["timestamp"]) > VIDEO_CACHE_TTL_MS
+        ]
+
+        for key in stale_keys:
+            video_info_cache.pop(key, None)
+
+
+def _download_row_to_info(row: Any) -> DownloadInfo:
+    created_at = row["completed_at"] or row["created_at"]
+    return DownloadInfo(
+        job_id=row["job_id"],
+        id=row["source_id"],
+        title=row["title"],
+        filename=row["filename"],
+        path=row["filepath"],
+        size=row["size"],
+        type=row["type"],
+        created_at=created_at,
+        thumbnail=row["thumbnail"],
+        error=row["error"],
+    )
+
 
 @app.on_event("startup")
-async def startup_reconnect():
-    global redisClient
-    if redisClient is None:
-        print("[API] Redis não conectado na inicialização, tentando novamente...")
-        from api.redisClient import get_redis as _get
-        redisClient = _get()
-        if redisClient:
-            print("[API] Redis reconectado com sucesso no startup!")
-        else:
-            print("[API] AVISO: Redis ainda não disponível. As rotas retornarão 503 até que o Redis esteja pronto.")
+async def startup() -> None:
+    db = get_db()
+    create_table(db)
+    await progress_manager.start()
+    app.state.cache_cleanup_task = asyncio.create_task(trim_video_info_cache())
+    print("[API] SQLite conectado com sucesso.")
 
 
-progress_manager = None
+@app.on_event("shutdown")
+async def shutdown() -> None:
+    cache_cleanup_task = getattr(app.state, "cache_cleanup_task", None)
+    if cache_cleanup_task is not None:
+        cache_cleanup_task.cancel()
+        with suppress(asyncio.CancelledError):
+            await cache_cleanup_task
 
-@app.on_event("startup")
-async def init_progress_manager():
-    global progress_manager
-    r = get_redis()
-    if r:
-        progress_manager = ProgressManager(r)
+    await progress_manager.stop()
 
 
-# CORS
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -67,241 +207,197 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-CACHE_TTL_MS = 5 * 60 * 1000
-
-feed_cache: Optional[dict] = None
 
 @app.get("/feed")
-async def getFeed():
+async def get_feed():
     global feed_cache
+
     try:
-        now = int(datetime.now(timezone.utc).timestamp() * 1000)
+        now = _utc_ms()
         if feed_cache and (now - feed_cache["timestamp"]) < CACHE_TTL_MS:
             return feed_cache["data"]
-        
-        videoInfo = await getvideos()
-        recomendedVideos = recommendVideos(videoInfo)
 
-        feed_cache = {"data": [v.__dict__ for v in recomendedVideos], "timestamp": now}
-
+        recommended_videos = recommendVideos(await getvideos())
+        feed_cache = {
+            "data": [video.__dict__ for video in recommended_videos],
+            "timestamp": now,
+        }
         return feed_cache["data"]
-
     except Exception as error:
         print(f"log error: {error}")
-        raise HTTPException(status_code=500, detail="erro ao buscar os videos")
+        raise HTTPException(status_code=500, detail="erro ao buscar os videos") from error
 
 
-VIDEO_CACHE_TTL_MS = 30 * 60 * 1000
-videoInfoCache: dict = {}
-
-async def clear_cache():
-    while True:
-        await asyncio.sleep(10 * 60)
-        now = int(datetime.now(timezone.utc).timestamp() * 1000)
-
-        keys_to_delete = [
-            key for key, entry in videoInfoCache.items()
-            if (now - entry["timestamp"]) > VIDEO_CACHE_TTL_MS
-        ]
-
-        for key in keys_to_delete:
-            del videoInfoCache[key]
-
-@app.post('/getInfoVideo')
-async def getinfoVideo(request: Request):
+@app.post("/getInfoVideo")
+async def get_info_video(request: Request):
     try:
         body = await request.json()
-        url = body.get('url')
-
+        url = body.get("url")
         if not url:
             raise HTTPException(status_code=400, detail="url nao e valida")
 
-        videoId = extractVideoId(url)
-        if not videoId:
-            raise HTTPException(status_code=400, detail="URL inválida")
+        video_id = extractVideoId(url)
+        if not video_id:
+            raise HTTPException(status_code=400, detail="URL invalida")
 
-        now = int(datetime.now(timezone.utc).timestamp() * 1000)
-        cached = videoInfoCache.get(videoId)
+        now = _utc_ms()
+        cached = video_info_cache.get(video_id)
         if cached and (now - cached["timestamp"]) < VIDEO_CACHE_TTL_MS:
             return cached["data"]
 
-        previwInfo = await getInfosVideo(videoId)
-
-        videoInfoCache[videoId] = {"data": previwInfo, "timestamp": now}
-
-        return previwInfo
-
+        preview_info = await getInfosVideo(video_id)
+        video_info_cache[video_id] = {
+            "data": preview_info,
+            "timestamp": now,
+        }
+        return preview_info
     except HTTPException:
         raise
     except Exception as error:
-        if hasattr(error, 'response') and error.response.status_code == 403:
-            print("YouTube bloqueou a requisição (provável limite de API ou IP)")
+        if hasattr(error, "response") and error.response.status_code == 403:
+            print("YouTube bloqueou a requisicao")
         else:
             print(f"Erro no /getInfoVideo: {error}")
-            
-        raise HTTPException(status_code=500, detail="Falha ao obter as informações do vídeo")
+        raise HTTPException(status_code=500, detail="Falha ao obter as informacoes do video") from error
 
-# Aqui é o coração do projeto
+
 @app.post("/downloadtask")
-def create_download(data: DownloadRequest, r = Depends(require_redis)):
+def create_download(data: DownloadRequest, db=Depends(require_db)):
+    job_type = data.type.strip().lower()
+    if job_type not in {"video", "audio"}:
+        raise HTTPException(status_code=400, detail="tipo de download invalido")
+
     job_id = str(uuid4())
-
-    # Usa pipeline para agrupar todas as operações em um único round-trip
-    pipe = r.pipeline(transaction=False)
-    pipe.set(f"download:{job_id}:type", data.type)
-    pipe.set(f"download:{job_id}:status", "queued")
-    pipe.set(f"download:{job_id}:progress", 0)
-    pipe.set(f"download:{job_id}:url", data.url)
-    pipe.set(f"download:{job_id}:user_id", data.user_id)
-    
-    # Todas as expirações juntas
-    pipe.expire(f"download:{job_id}:status", 3600)
-    pipe.expire(f"download:{job_id}:progress", 3600)
-    pipe.expire(f"download:{job_id}:url", 3600)
-    pipe.expire(f"download:{job_id}:format", 3600)
-    pipe.expire(f"download:{job_id}:user_id", 3600)
-    
-    pipe.sadd(f"user:{data.user_id}:jobs", job_id)
-    pipe.lpush("queue:downloads", job_id)
-    pipe.execute()
-
+    db.execute(
+        """
+        INSERT INTO downloads (
+            job_id,
+            url,
+            user_id,
+            type,
+            status,
+            progress,
+            next_attempt_at
+        )
+        VALUES (?, ?, ?, ?, 'queued', 0, CURRENT_TIMESTAMP)
+        """,
+        (job_id, data.url, data.user_id, job_type),
+    )
     return {"job_id": job_id}
 
-# aqui ele retorna status, progresso do job_id do worker
+
 @app.get("/downloadStatus/{job_id}", response_model=DownloadStatus)
-def get_status(job_id: str, r = Depends(require_redis)):
-    # Pipeline: busca status e progresso em um único round-trip
-    pipe = r.pipeline(transaction=False)
-    pipe.get(f"download:{job_id}:status")
-    pipe.get(f"download:{job_id}:progress")
-    results = pipe.execute()
-    
-    status = results[0]
+def get_status(job_id: str, db=Depends(require_db)):
+    row = db.execute(
+        """
+        SELECT job_id, status, progress, error
+        FROM downloads
+        WHERE job_id = ?
+        """,
+        (job_id,),
+    ).fetchone()
+
+    if row is None:
+        raise HTTPException(status_code=404, detail="Job nao encontrado")
+
+    return DownloadStatus(
+        job_id=row["job_id"],
+        status=row["status"],
+        progress=float(row["progress"] or 0),
+        error=row["error"],
+    )
+
+
+@app.websocket("/ws/downloads/{job_id}")
+async def download_progress_socket(websocket: WebSocket, job_id: str):
+    await progress_manager.connect(job_id, websocket)
     try:
-        progress = float(results[1] or 0)
+        while True:
+            await websocket.receive_text()
+    except WebSocketDisconnect:
+        progress_manager.disconnect(job_id, websocket)
     except Exception:
-        progress = 0.0
+        progress_manager.disconnect(job_id, websocket)
+        raise
 
-    return {
-        "job_id": job_id,
-        "status": status,
-        "progress": progress,
-    }
 
-# aqui ele cancela o download e retorna o status de 'cancelled'
 @app.post("/downloadCancel/{job_id}")
-def cancel_download(job_id: str, r = Depends(require_redis)):
-    pipe = r.pipeline(transaction=False)
-    pipe.set(f"download:{job_id}:cancel", "1")
-    pipe.set(f"download:{job_id}:status", "cancelled")
-    pipe.set(f"download:{job_id}:progress", 0)
-    pipe.execute()
+def cancel_download(job_id: str, db=Depends(require_db)):
+    row = db.execute(
+        "SELECT status FROM downloads WHERE job_id = ?",
+        (job_id,),
+    ).fetchone()
+
+    if row is None:
+        raise HTTPException(status_code=404, detail="Job nao encontrado")
+
+    db.execute(
+        """
+        UPDATE downloads
+        SET
+            cancel_requested = 1,
+            status = CASE
+                WHEN status IN ('done', 'failed', 'cancelled') THEN status
+                ELSE 'cancelled'
+            END,
+            updated_at = CURRENT_TIMESTAMP
+        WHERE job_id = ?
+        """,
+        (job_id,),
+    )
     return {"job_id": job_id, "cancelled": True}
 
-@app.post('/downloadPath')
-def downloadsetPath(data: DownloadDIR, r = Depends(require_redis)):
-    r.set('download:dir', data.path)
-    return {"status": "ok"} 
 
-
-@app.post('/downloadSettings')
-def set_download_settings(r = Depends(require_redis), settings: dict = Body(...)):
-    mapping = {
-        'default_video_format': 'settings:default:video_format',
-        'default_audio_format': 'settings:default:audio_format',
-        'video_quality': 'settings:video:quality',
-        'audio_quality': 'settings:audio:quality',
-    }
-
-    # Pipeline para salvar todas as configurações de uma vez
-    pipe = r.pipeline(transaction=False)
-    for k, v in settings.items():
-        if k in mapping and v is not None:
-            pipe.set(mapping[k], str(v))
-    pipe.execute()
-
+@app.post("/downloadPath")
+def set_download_path(data: DownloadDIR, db=Depends(require_db)):
+    set_setting("download_path", data.path, db)
     return {"status": "ok"}
 
 
-@app.get('/list_downloads', response_model=List[DownloadInfo])
-def list_downloads(r = Depends(require_redis)):
-    ids = r.smembers('downloads:completed') or []
-    if not ids:
-        return []
-    
-    # Pipeline: buscar todas as infos de uma vez
-    pipe = r.pipeline(transaction=False)
-    for job_id in ids:
-        pipe.get(f"download:{job_id}:info")
-    raw_results = pipe.execute()
-    
-    results = []
-    for job_id, raw in zip(ids, raw_results):
-        if raw:
-            try:
-                info = json.loads(raw)
-            except Exception:
-                info = {"job_id": job_id, "title": "Error parsing metadata"}
-        else:
-            # Fallback: buscar campos individuais via pipeline
-            fb_pipe = r.pipeline(transaction=False)
-            fb_pipe.get(f"download:{job_id}:id")
-            fb_pipe.get(f"download:{job_id}:title")
-            fb_pipe.get(f"download:{job_id}:type")
-            fb_results = fb_pipe.execute()
-            
-            info = {
-                "job_id": job_id,
-                "id": fb_results[0],
-                "title": fb_results[1],
-                "filename": None,
-                "path": None,
-                "size": None,
-                "type": fb_results[2],
-                "created_at": None,
-            }
-        results.append(info)
-
-    return results
-    
-@app.get('/userDownload/{user_id}/downloads')  
-def list_user_downloads(user_id: str, r = Depends(require_redis)):
-    ids = r.smembers(f"user:{user_id}:downloads:completed") or []
-    if not ids:
-        return []
-    
-    # Pipeline: buscar todas as infos de uma vez
-    pipe = r.pipeline(transaction=False)
-    for job_id in ids:
-        pipe.get(f"download:{job_id}:info")
-    raw_results = pipe.execute()
-    
-    resultsUser = []
-    for job_id, raw in zip(ids, raw_results):
-        if raw:
-            try:
-                info = json.loads(raw)
-            except Exception:
-                info = {"job_id": job_id, "title": "Error parsing metadata"}
-        else:
-            info = {"job_id": job_id}
-         
-        resultsUser.append(info)
-    
-    return resultsUser
-
-@app.post('/deletCache')
-def clear_cache(r = Depends(require_redis)):
-    keys = r.keys("cache:*")
-    if keys:
-        r.delete(*keys)
-
+@app.post("/downloadSettings")
+def set_download_settings(settings: DownloadSettings, db=Depends(require_db)):
+    payload = settings.model_dump(exclude_none=True)
+    for key, value in payload.items():
+        set_setting(key, str(value), db)
     return {"status": "ok"}
 
-@app.post('/deletuserSettings')
-def clear_settings(r = Depends(require_redis)):
-    keys = r.keys("settings:*")
-    if keys:
-        r.delete(*keys)
 
+@app.get("/list_downloads", response_model=list[DownloadInfo])
+def list_downloads(db=Depends(require_db)):
+    rows = db.execute(
+        """
+        SELECT job_id, source_id, title, filename, filepath, size, type, thumbnail, error, created_at, completed_at
+        FROM downloads
+        WHERE status = 'done'
+        ORDER BY datetime(COALESCE(completed_at, created_at)) DESC
+        """
+    ).fetchall()
+    return [_download_row_to_info(row) for row in rows]
+
+
+@app.get("/userDownload/{user_id}/downloads", response_model=list[DownloadInfo])
+def list_user_downloads(user_id: str, db=Depends(require_db)):
+    rows = db.execute(
+        """
+        SELECT job_id, source_id, title, filename, filepath, size, type, thumbnail, error, created_at, completed_at
+        FROM downloads
+        WHERE user_id = ? AND status = 'done'
+        ORDER BY datetime(COALESCE(completed_at, created_at)) DESC
+        """,
+        (user_id,),
+    ).fetchall()
+    return [_download_row_to_info(row) for row in rows]
+
+
+@app.post("/deletCache")
+def clear_runtime_cache():
+    global feed_cache
+    feed_cache = None
+    video_info_cache.clear()
+    return {"status": "ok"}
+
+
+@app.post("/deletuserSettings")
+def delete_user_settings(db=Depends(require_db)):
+    clear_settings(db)
     return {"status": "ok"}

@@ -1,130 +1,46 @@
+from __future__ import annotations
+
 import json
+import logging
 import signal
 import time
 import uuid
-import logging
-import os
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
-from typing import Optional
+from typing import Any, Optional
 
-import redis
-import threading
 from yt_dlp import YoutubeDL
 
-
-# Configuração do Redis vinda do ambiente
-REDIS_HOST = os.getenv('REDIS_HOST', 'localhost')
-REDIS_PORT = int(os.getenv('REDIS_PORT', 6379))
-REDIS_PASS = os.getenv('REDIS_PASSWORD')
-if REDIS_PASS and not REDIS_PASS.strip():
-    REDIS_PASS = None
-elif not REDIS_PASS:
-    REDIS_PASS = None
-
-# Pool de conexões Redis - reutiliza conexões em vez de criar novas
-_redis_pool = redis.ConnectionPool(
-    host=REDIS_HOST,
-    port=REDIS_PORT,
-    password=REDIS_PASS,
-    decode_responses=True,
-    max_connections=10,
-    socket_connect_timeout=5,
-    socket_timeout=30,
-    retry_on_timeout=True,
-)
-
-MAX_CONNECT_RETRIES = 30
-INITIAL_BACKOFF = 1
-MAX_BACKOFF = 10
-
-_redis_client = None
-_redis_lock = threading.Lock()
+from api.sqliteClient import create_table, get_db, get_setting, recover_incomplete_downloads
 
 
-def _connect_with_retry():
-    """Tenta conectar ao Redis com retry e backoff exponencial."""
-    backoff = INITIAL_BACKOFF
-    for attempt in range(1, MAX_CONNECT_RETRIES + 1):
-        try:
-            client = redis.Redis(connection_pool=_redis_pool)
-            client.ping()
-            print(f"[Redis-Worker] Conectado com sucesso ao Redis em {REDIS_HOST}:{REDIS_PORT} (tentativa {attempt})")
-            return client
-        except (redis.ConnectionError, redis.TimeoutError) as e:
-            if attempt == MAX_CONNECT_RETRIES:
-                print(f"[Redis-Worker] ERRO: Não foi possível conectar ao Redis após {MAX_CONNECT_RETRIES} tentativas: {e}")
-                return None
-            print(f"[Redis-Worker] Tentativa {attempt}/{MAX_CONNECT_RETRIES} falhou, aguardando {backoff}s... ({e})")
-            time.sleep(backoff)
-            backoff = min(backoff * 1.5, MAX_BACKOFF)
-    return None
-
-
-def get_redis_connection():
-    """Retorna o cliente Redis, criando conexão com retry se necessário."""
-    global _redis_client
-    with _redis_lock:
-        if _redis_client is not None:
-            try:
-                _redis_client.ping()
-                return _redis_client
-            except Exception:
-                print("[Redis-Worker] Conexão perdida, reconectando...")
-                _redis_client = None
-        _redis_client = _connect_with_retry()
-        return _redis_client
-
-
-# Conexão inicial com retry (espera o Docker subir)
-r = get_redis_connection()
-
-
-# diretório padrão de download (lido do redis se existir)
 DOWNLOAD_PATH_DEFAULT = Path.home() / "Downloads"
-    
-
-# Configurações de worker
 MAX_RETRIES = 3
-LOCK_TTL = 60 * 60  # 1 hora
-RETRY_BACKOFF = 5  # segundos entre tentativas
-
-# tipo de identidade de caracter para o worker.
+RETRY_BACKOFF_SECONDS = 5
+POLL_INTERVAL_SECONDS = 1
+PROGRESS_THROTTLE_MS = 500
 WORKER_ID = str(uuid.uuid4())
 
-# logs estruturados em JSON para facilitar parsing
+
 logger = logging.getLogger("download_worker")
 handler = logging.StreamHandler()
-formatter = logging.Formatter("%(message)s")
-handler.setFormatter(formatter)
+handler.setFormatter(logging.Formatter("%(message)s"))
 logger.addHandler(handler)
 logger.setLevel(logging.INFO)
 
 
-def _log_structured(event: str, extra: dict):
-    payload = {"event": event, **extra}
-    logger.info(json.dumps(payload, ensure_ascii=False))
-
-
-# tenta colocar o lock em NX caso precise.
-def acquire_lock(job_id: str) -> bool:
-    lock_key = f"download:{job_id}:lock"
-    return r.set(lock_key, WORKER_ID, nx=True, ex=LOCK_TTL)
-
-# aqui ele coloca o lock em cada worker para não ter o mesmo worker funcionando várias vezes
-def release_lock(job_id: str) -> None:
-    lock_key = f"download:{job_id}:lock"
-    try:
-        val = r.get(lock_key)
-        if val == WORKER_ID:
-            r.delete(lock_key)
-    except Exception:
-        pass
-
-
-# aqui funciona o encerramento do worker.
 shutdown_requested = False
 
-def _signal_handler(signum, frame):
+
+class DownloadCancelled(Exception):
+    pass
+
+
+def _log_structured(event: str, extra: dict[str, Any]) -> None:
+    logger.info(json.dumps({"event": event, **extra}, ensure_ascii=False))
+
+
+def _signal_handler(signum, _frame) -> None:
     global shutdown_requested
     shutdown_requested = True
     _log_structured("shutdown_request", {"signal": signum})
@@ -134,187 +50,182 @@ signal.signal(signal.SIGINT, _signal_handler)
 signal.signal(signal.SIGTERM, _signal_handler)
 
 
-def process_job(job_id: str):
-    # ultilizacao de pipeline para evitar multiplos pedidos no redis, assim melhorando o desempenho e automatizando o processo de download!
-    pipe = r.pipeline(transaction=False)
-    pipe.get(f"download:{job_id}:user_id")
-    pipe.get(f"download:{job_id}:url")
-    pipe.get(f"download:{job_id}:cancel")
-    pipe.get(f"download:{job_id}:type")
-    pipe.get(f"download:{job_id}:format")
-    results = pipe.execute()
-    
-    user_id = results[0]
-    url = results[1]
-    cancel_flag = results[2]
-    job_type_raw = results[3]
-    job_format = results[4]
+def _utc_db_timestamp(offset_seconds: int = 0) -> str:
+    target = datetime.now(timezone.utc) + timedelta(seconds=offset_seconds)
+    return target.strftime("%Y-%m-%d %H:%M:%S")
 
-    if not url:
-        pipe = r.pipeline(transaction=False)
-        pipe.set(f"download:{job_id}:status", "error")
-        pipe.set(f"download:{job_id}:error", "URL não encontrada")
-        pipe.execute()
-        _log_structured("job_error", {"job_id": job_id, "reason": "url not found"})
+
+def _normalize_quality(value: Optional[str]) -> Optional[str]:
+    if not value:
+        return None
+
+    normalized = str(value).strip().lower().replace("p", "").replace("fps", "")
+    return normalized if normalized.isdigit() else None
+
+
+def _update_download(job_id: str, **fields: Any) -> None:
+    if not fields:
         return
 
-    # se já existe sinal de cancelamento antes de começar, aborta
-    if cancel_flag:
-        r.set(f"download:{job_id}:status", "cancelled")
-        _log_structured("job_cancelled_pre", {"job_id": job_id})
-        return
+    db = get_db()
+    assignments = []
+    values = []
 
-    # tenta adquirir lock, se não conseguir, outro worker já está processando
-    locked = acquire_lock(job_id)
-    if not locked:
-        _log_structured("lock_skip", {"job_id": job_id})
-        return
+    for key, value in fields.items():
+        assignments.append(f"{key} = ?")
+        values.append(value)
 
-    # marca que estamos processando (pipeline)
-    pipe = r.pipeline(transaction=False)
-    pipe.set(f"download:{job_id}:status", "downloading")
-    pipe.set(f"download:{job_id}:progress", 0)
-    pipe.sadd(f"user:{user_id}:jobs", job_id)
-    pipe.execute()
+    assignments.append("updated_at = CURRENT_TIMESTAMP")
+    values.append(job_id)
 
-    cancel_key = f"download:{job_id}:cancel"
-    
-    # Throttle: só envia progresso ao Redis a cada 500ms para reduzir I/O
-    _last_progress_time = [0.0]
-    PROGRESS_THROTTLE_MS = 500
+    db.execute(
+        f"UPDATE downloads SET {', '.join(assignments)} WHERE job_id = ?",
+        values,
+    )
 
-    def hook(d):
-        status = d.get("status")
-        # respeitar cancelamento durante o download
-        if r.get(cancel_key):
-            raise Exception("cancelled by user")
+
+def _get_job(job_id: str) -> Optional[Any]:
+    return get_db().execute(
+        """
+        SELECT job_id, url, user_id, type, status, progress, cancel_requested, attempt_count
+        FROM downloads
+        WHERE job_id = ?
+        """,
+        (job_id,),
+    ).fetchone()
+
+
+def _claim_next_job() -> Optional[Any]:
+    db = get_db()
+    db.execute("BEGIN IMMEDIATE")
+
+    try:
+        row = db.execute(
+            """
+            SELECT job_id
+            FROM downloads
+            WHERE status = 'queued'
+              AND cancel_requested = 0
+              AND datetime(next_attempt_at) <= CURRENT_TIMESTAMP
+            ORDER BY datetime(created_at) ASC
+            LIMIT 1
+            """
+        ).fetchone()
+
+        if row is None:
+            db.execute("COMMIT")
+            return None
+
+        updated = db.execute(
+            """
+            UPDATE downloads
+            SET
+                status = 'downloading',
+                progress = 0,
+                worker_id = ?,
+                error = NULL,
+                updated_at = CURRENT_TIMESTAMP
+            WHERE job_id = ? AND status = 'queued'
+            """,
+            (WORKER_ID, row["job_id"]),
+        ).rowcount
+
+        db.execute("COMMIT")
+        if updated != 1:
+            return None
+
+        return _get_job(row["job_id"])
+    except Exception:
+        db.execute("ROLLBACK")
+        raise
+
+
+def _is_cancel_requested(job_id: str) -> bool:
+    row = get_db().execute(
+        "SELECT cancel_requested FROM downloads WHERE job_id = ?",
+        (job_id,),
+    ).fetchone()
+    return bool(row and row["cancel_requested"])
+
+
+def _resolve_download_dir() -> Path:
+    configured_path = get_setting("download_path")
+
+    try:
+        directory = Path(configured_path) if configured_path else DOWNLOAD_PATH_DEFAULT
+    except Exception:
+        directory = DOWNLOAD_PATH_DEFAULT
+
+    directory.mkdir(parents=True, exist_ok=True)
+    return directory
+
+
+def _resolve_ffmpeg_location() -> Optional[str]:
+    base_path = Path(__file__).resolve().parent.parent.parent
+    ffmpeg_bin = base_path / "bin" / "ffmpeg" / "ffmpeg.exe"
+    return str(ffmpeg_bin) if ffmpeg_bin.exists() else None
+
+
+def _determine_output_format(job_type: str) -> tuple[str, Optional[str], str]:
+    audio_formats = {"mp3", "wav", "aac", "m4a", "opus", "flac"}
+
+    if job_type == "audio":
+        desired_format = (get_setting("default_audio_format", "mp3") or "mp3").lower()
+    else:
+        desired_format = (get_setting("default_video_format", "mp4") or "mp4").lower()
+
+    return desired_format, desired_format if desired_format in audio_formats else None, desired_format
+
+
+def _build_ydl_options(job_id: str, job_type: str) -> dict[str, Any]:
+    desired_format, audio_codec, merge_format = _determine_output_format(job_type)
+    raw_video_quality = get_setting("video_quality")
+    raw_audio_quality = get_setting("audio_quality", "192") or "192"
+
+    video_quality = _normalize_quality(raw_video_quality)
+    audio_quality = raw_audio_quality.strip() if str(raw_audio_quality).isdigit() else "192"
+    download_dir = _resolve_download_dir()
+
+    last_progress_time = [0.0]
+
+    def hook(data: dict[str, Any]) -> None:
+        if _is_cancel_requested(job_id):
+            raise DownloadCancelled("cancelled by user")
+
+        status = data.get("status")
         if status == "downloading":
             now_ms = time.time() * 1000
-            # Throttle: pula atualizações muito frequentes
-            if (now_ms - _last_progress_time[0]) < PROGRESS_THROTTLE_MS:
+            if (now_ms - last_progress_time[0]) < PROGRESS_THROTTLE_MS:
                 return
-            _last_progress_time[0] = now_ms
-            
-            downloaded = int(d.get('downloaded_bytes') or 0)
-            total = int(d.get("total_bytes") or d.get('total_bytes_estimate') or 0)
+            last_progress_time[0] = now_ms
 
-            info = d.get("info_dict") or {}
-            stream_id = info.get("format_id") or "unknown"
-
-            # Usar pipeline para ler e escrever de uma vez
-            read_pipe = r.pipeline(transaction=False)
-            read_pipe.get(f"download:{job_id}:last_downloaded:{stream_id}")
-            read_pipe.get(f"download:{job_id}:bytes_accumulated")
-            read_results = read_pipe.execute()
-            
-            try:
-                last = int(read_results[0] or 0)
-            except Exception:
-                last = 0
-            
-            try:
-                accum = int(read_results[1] or 0)
-            except Exception:
-                accum = 0
-
-            if downloaded >= last:
-                delta = downloaded - last
-            else:
-                delta = downloaded
-
-            accum += max(0, delta)
+            downloaded = float(data.get("downloaded_bytes") or 0)
+            total = float(data.get("total_bytes") or data.get("total_bytes_estimate") or 0)
 
             percent = 0.0
             if total > 0:
                 percent = downloaded / total * 100
             else:
-                frag_index = d.get("fragment_index")
-                frag_count = d.get("fragment_count")
-                if frag_index and frag_count:
+                fragment_index = data.get("fragment_index")
+                fragment_count = data.get("fragment_count")
+                if fragment_index and fragment_count:
                     try:
-                        percent = (frag_index / frag_count) * 100
+                        percent = float(fragment_index) / float(fragment_count) * 100
                     except Exception:
                         percent = 0.0
 
-            # Pipeline de escrita - todas as operações em um único round-trip
-            write_pipe = r.pipeline(transaction=False)
-            write_pipe.incrby(f"user:{user_id}:total_bytes", delta)
-            write_pipe.incrby("global:total_bytes", delta)
-            write_pipe.set(f"download:{job_id}:bytes_accumulated", accum)
-            write_pipe.set(f"download:{job_id}:last_downloaded:{stream_id}", downloaded)
-            write_pipe.set(f"download:{job_id}:progress", percent, 2)
-            write_pipe.set(f"download:{job_id}:status", "downloading")
-            write_pipe.execute()
-
+            percent = max(0.0, min(100.0, percent))
+            _update_download(job_id, status="downloading", progress=round(percent, 2))
             _log_structured("progress", {"job_id": job_id, "progress": round(percent, 1)})
 
         elif status == "finished":
-            r.set(f"download:{job_id}:status", "processing")
+            _update_download(job_id, status="processing")
             _log_structured("stream_finished", {"job_id": job_id})
 
-    # aqui determina o tipo de job enviado do usuário
-    job_type = (job_type_raw or "video").lower()
-
-    # se não tem formato no job, buscar defaults globais em redis conforme tipo
-    if job_format:
-        desired_format = job_format.lower()
-    else:
-        if job_type == "audio":
-            desired_format = (r.get("settings:default:audio_format") or "mp3").lower()
-        else:
-            desired_format = (r.get("settings:default:video_format") or "mp4").lower()
-
-    """Normaliza o valor da qualidade para somente a qualidade que o usuário quer.
-    """
-    def normalize_quality(q):
-        if not q:
-            return None
-        q = str(q).lower().strip()
-        q = q.replace("p", "").replace("fps", "")
-        return q if q.isdigit() else None
-
-    # Pipeline para ler configurações de qualidade
-    q_pipe = r.pipeline(transaction=False)
-    q_pipe.get(f"download:{job_id}:video_quality")
-    q_pipe.get("settings:video:quality")
-    q_pipe.get(f"download:{job_id}:audio_quality")
-    q_pipe.get("settings:audio:quality")
-    q_results = q_pipe.execute()
-    
-    raw_vq = q_results[0] or q_results[1]
-    raw_aq = q_results[2] or q_results[3] or "192"
-
-    audio_quality = raw_aq.strip() if raw_aq.isdigit() else "192"
-    video_quality = normalize_quality(raw_vq)
-
-    # formatos suportados para extrair áudio
-    audio_formats = {"mp3", "wav", "aac", "m4a", "opus", "flac"}
-
-    # Determinar DOWNLOAD_DIR: usar valor em redis se existir, senão DEFAULT
-    download_dir_raw = r.get("download:dir")
-
-    try:
-        if download_dir_raw:
-            DOWNLOAD_DIR = Path(download_dir_raw)
-        else:
-            DOWNLOAD_DIR = DOWNLOAD_PATH_DEFAULT
-    except Exception:
-        DOWNLOAD_DIR = Path.home() / 'Downloads'
-        
-    
-    # Localizar o FFmpeg de forma portátil
-    base_path = Path(__file__).resolve().parent.parent.parent
-    ffmpeg_bin = base_path / "bin" / "ffmpeg" / "ffmpeg.exe"
-    
-    # Se não achar o interno (em dev), tenta o do sistema
-    ffmpeg_location = str(ffmpeg_bin) if ffmpeg_bin.exists() else None
-
-    # opções base comuns
-    ydl_opts = {
+    ydl_opts: dict[str, Any] = {
         "progress_hooks": [hook],
-        "outtmpl": str(DOWNLOAD_DIR / "%(title)s_%(format_id)s.%(ext)s"),
-        "ffmpeg_location": ffmpeg_location,
-        "js-runtimes": ["node"],
+        "outtmpl": str(download_dir / "%(title)s_%(format_id)s.%(ext)s"),
+        "ffmpeg_location": _resolve_ffmpeg_location(),
         "user_agent": (
             "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
             "AppleWebKit/537.36 (KHTML, like Gecko) "
@@ -333,161 +244,143 @@ def process_job(job_id: str):
         "noprogress": True,
     }
 
-    fmt_option = None  
-
-    if job_type == "audio" or desired_format in audio_formats:
+    if job_type == "audio" or audio_codec is not None:
         ydl_opts.update({
             "format": "bestaudio/best",
             "postprocessors": [{
                 "key": "FFmpegExtractAudio",
                 "preferredcodec": desired_format,
-                "preferredquality": str(audio_quality),
+                "preferredquality": audio_quality,
             }],
         })
-    
     else:
-        if video_quality:
-            fmt_option = f"bv*[height<={video_quality}]+ba/b"
-        else:
-            fmt_option = "bv*+ba/b"
-
+        video_format = f"bv*[height<={video_quality}]+ba/b" if video_quality else "bv*+ba/b"
         ydl_opts.update({
-            "format": fmt_option,
-            "merge_output_format": desired_format if desired_format else "mp4"
+            "format": video_format,
+            "merge_output_format": merge_format or "mp4",
         })
+
+    return ydl_opts
+
+
+def _resolve_output_file(ydl: YoutubeDL, info_dict: dict[str, Any], job_type: str) -> tuple[Optional[str], Optional[str], Optional[int]]:
+    desired_format, audio_codec, merge_format = _determine_output_format(job_type)
+
+    try:
+        prepared = ydl.prepare_filename(info_dict)
+    except Exception:
+        return None, None, None
+
+    if not prepared:
+        return None, None, None
+
+    path = Path(prepared)
+    if not path.exists():
+        base = path.with_suffix("")
+        if job_type == "audio" or audio_codec is not None:
+            path = Path(f"{base}.{desired_format}")
+        elif merge_format:
+            path = Path(f"{base}.{merge_format}")
+
+    if not path.exists():
+        return Path(prepared).name, None, None
+
+    resolved = path.resolve()
+    return path.name, str(resolved), resolved.stat().st_size
+
+
+def process_job(job: Any) -> None:
+    job_id = job["job_id"]
+    url = job["url"]
+    job_type = (job["type"] or "video").lower()
+
+    if not url:
+        _update_download(
+            job_id,
+            status="failed",
+            error="URL nao encontrada",
+            worker_id=None,
+        )
+        _log_structured("job_error", {"job_id": job_id, "reason": "url not found"})
+        return
+
+    if _is_cancel_requested(job_id):
+        _update_download(job_id, status="cancelled", error="cancelled by user", worker_id=None)
+        _log_structured("job_cancelled_pre", {"job_id": job_id})
+        return
+
+    ydl_opts = _build_ydl_options(job_id, job_type)
 
     try:
         with YoutubeDL(ydl_opts) as ydl:
             info_dict = ydl.extract_info(url, download=True)
 
-        r.set(f"download:{job_id}:status", "processing")
-        
-        final_filename = None
-        filepath = None
-        filesize = None
-        
-        try:
-            if info_dict:
-                final_filename = ydl.prepare_filename(info_dict)
-                
-                if final_filename:
-                    p = Path(final_filename)
-                    
-                    if not p.exists():
-                        if job_type == "audio" or desired_format in audio_formats:
-                            base = p.with_suffix('')
-                            p = Path(str(base) + f".{desired_format}")
-                        elif desired_format:
-                            base = p.with_suffix('')
-                            p = Path(str(base) + f".{desired_format}")
-                    
-                    if p.exists():
-                        filepath = str(p.resolve())
-                        filesize = p.stat().st_size
-                        _log_structured("file_size_from_disk", {
-                            "job_id": job_id, 
-                            "size": filesize,
-                            "path": filepath
-                        })
-        except Exception as e:
-            _log_structured("metadata_extraction_error", {"job_id": job_id, "error": str(e)})
-        
-        if filesize is None:
-            filesize = int(r.get(f"download:{job_id}:bytes_accumulated") or 0)
-        
-        created_at = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
-        
-        metadata = {
-            "id": info_dict.get("id") if info_dict else None,
-            "title": info_dict.get("title") if info_dict else None,
-            "filename": Path(final_filename).name if final_filename else None,
-            "path": filepath,
-            "size": int(filesize) if filesize is not None else None,
-            "type": job_type,
-            "created_at": created_at,
-        }
-        
-        # Pipeline final: salva metadata + marca como concluído em um round-trip
-        try:
-            done_pipe = r.pipeline(transaction=False)
-            done_pipe.set(f"download:{job_id}:info", json.dumps(metadata, ensure_ascii=False))
-            done_pipe.sadd("downloads:completed", job_id)
-            done_pipe.sadd(f"user:{user_id}:downloads:completed", job_id)
-            done_pipe.set(f"download:{job_id}:status", "done")
-            done_pipe.set(f"download:{job_id}:progress", 100)
-            done_pipe.execute()
-            
-            _log_structured("job_done", {
-                "job_id": job_id,
-                "size": metadata["size"],
-                "title": metadata["title"]
-            })
-        except Exception as e:
-            _log_structured("metadata_store_error", {"job_id": job_id, "error": str(e)})
+            filename, filepath, filesize = _resolve_output_file(ydl, info_dict, job_type)
 
-    except Exception as e:
-        _log_structured("job_exception", {"job_id": job_id, "error": str(e)})
+        source_id = info_dict.get("id") if info_dict else None
+        title = info_dict.get("title") if info_dict else None
+        thumbnail = info_dict.get("thumbnail") if info_dict else None
 
-        if r.get(cancel_key):
-            pipe = r.pipeline(transaction=False)
-            pipe.set(f"download:{job_id}:status", "cancelled")
-            pipe.set(f"download:{job_id}:error", "cancelled by user")
-            pipe.lpush("queue:downloads:dead", job_id)
-            pipe.execute()
-            _log_structured("job_cancelled", {"job_id": job_id})
-            return
-
-        attempts_key = f"download:{job_id}:attempts"
-        attempts = int(r.get(attempts_key) or 0) + 1
-        r.set(attempts_key, attempts)
+        _update_download(
+            job_id,
+            status="done",
+            progress=100,
+            source_id=source_id,
+            title=title,
+            thumbnail=thumbnail,
+            filename=filename,
+            filepath=filepath,
+            size=filesize,
+            error=None,
+            completed_at=_utc_db_timestamp(),
+            worker_id=None,
+        )
+        _log_structured("job_done", {"job_id": job_id, "title": title, "size": filesize})
+    except DownloadCancelled as error:
+        _update_download(job_id, status="cancelled", error=str(error), worker_id=None)
+        _log_structured("job_cancelled", {"job_id": job_id})
+    except Exception as error:
+        attempts = int(job["attempt_count"] or 0) + 1
+        _log_structured("job_exception", {"job_id": job_id, "error": str(error), "attempts": attempts})
 
         if attempts >= MAX_RETRIES:
-            pipe = r.pipeline(transaction=False)
-            pipe.set(f"download:{job_id}:status", "failed")
-            pipe.set(f"download:{job_id}:error", str(e))
-            pipe.lpush("queue:downloads:dead", job_id)
-            pipe.execute()
+            _update_download(
+                job_id,
+                status="failed",
+                error=str(error),
+                attempt_count=attempts,
+                worker_id=None,
+            )
             _log_structured("job_failed", {"job_id": job_id, "attempts": attempts})
-        else:
-            r.set(f"download:{job_id}:status", "queued")
-            _log_structured("job_retry", {"job_id": job_id, "attempts": attempts})
-            time.sleep(RETRY_BACKOFF * attempts)
-            r.lpush("queue:downloads", job_id)
-
-    finally:
-        release_lock(job_id)
-
-# aqui encerra o worker, caso requisitado.
-def _main_loop():
-    global r
-    _log_structured("worker_start", {"worker_id": WORKER_ID})
-    
-
-    if r is None:
-        _log_structured("connection_retry", {"reason": "Initial connection failed, retrying..."})
-        r = get_redis_connection()
-        if r is None:
-            _log_structured("connection_error", {"error": "Redis client is None após retry. Verifique se o Docker está rodando."})
             return
+
+        _update_download(
+            job_id,
+            status="queued",
+            progress=0,
+            error=str(error),
+            attempt_count=attempts,
+            next_attempt_at=_utc_db_timestamp(RETRY_BACKOFF_SECONDS * attempts),
+            worker_id=None,
+        )
+        _log_structured("job_retry", {"job_id": job_id, "attempts": attempts})
+
+
+def _main_loop() -> None:
+    create_table()
+    recover_incomplete_downloads()
+    _log_structured("worker_start", {"worker_id": WORKER_ID})
 
     while not shutdown_requested:
         try:
-            item = r.blpop("queue:downloads", timeout=5)
-            if item:
-                _, job_id = item
-                process_job(job_id)
-        except (redis.ConnectionError, redis.TimeoutError) as e:
-            _log_structured("connection_lost", {"error": str(e)})
-            # Tenta reconectar
-            r = get_redis_connection()
-            if r is None:
-                _log_structured("reconnect_failed", {"error": "Não foi possível reconectar ao Redis"})
-                time.sleep(5)
-                r = get_redis_connection()  # tenta mais uma vez
-                if r is None:
-                    break
-        except Exception as e:
-            _log_structured("loop_exception", {"error": str(e)})
+            job = _claim_next_job()
+            if job is None:
+                time.sleep(POLL_INTERVAL_SECONDS)
+                continue
+
+            process_job(job)
+        except Exception as error:
+            _log_structured("loop_exception", {"error": str(error)})
             time.sleep(1)
 
     _log_structured("worker_stopping", {"worker_id": WORKER_ID})
@@ -495,4 +388,3 @@ def _main_loop():
 
 if __name__ == "__main__":
     _main_loop()
-
